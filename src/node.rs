@@ -1,76 +1,29 @@
+use async_trait::async_trait;
+use dyn_clone::{clone_trait_object, DynClone};
 use std::error::Error;
-use std::future::Future;
-use std::pin::Pin;
-use std::time::Duration;
+use std::fmt::Debug;
 use thiserror::Error;
 
-enum NodeStatus {
-    Failed,
-    Success,
-}
+use super::workflow::WorkflowNodeType;
+
+pub(crate) mod types;
 
 #[derive(Error, Debug)]
-enum NodeError {
+pub enum NodeError {
     #[error("Failed")]
     Failed,
-    #[error("Comms")]
-    Comms,
+    #[error("Communications")]
+    Communication,
 }
 
-struct Start;
-struct Activity;
-struct Parallel;
-struct Exclusive;
-struct End;
-
-trait Workflow {}
-
-trait Pipeline {
-    fn create_node(&self, node: &impl Node);
-    fn update_node(&self, node: &impl Node);
-    fn create_meta(wf: impl Workflow);
-    fn update_meta(wf: impl Workflow);
+#[async_trait]
+pub trait Node: DynClone + Debug + Send + Sync {
+    fn kind(&self) -> WorkflowNodeType;
+    fn id(&self) -> &str;
+    async fn run(&self) -> Result<(), NodeError>;
 }
 
-pub trait Node {
-    type Future: Future<Output = Result<Self::Item, NodeError>>;
-    type Item;
-    fn run(&self) -> Self::Future;
-    fn add_pipeline(&self, pipeline: impl Pipeline)
-    where
-        Self: Sized,
-    {
-        pipeline.create_node(self);
-    }
-}
-
-type NodeFuture<T> = Pin<Box<dyn Future<Output = Result<T, NodeError>>>>;
-
-impl Node for Start {
-    type Future = NodeFuture<Self::Item>;
-    type Item = ();
-
-    fn run(&self) -> Self::Future {
-        Box::pin(async move { Ok(()) })
-    }
-}
-
-impl Node for Parallel {
-    type Future = NodeFuture<Self::Item>;
-    type Item = ();
-
-    fn run(&self) -> Self::Future {
-        Box::pin(async move {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-            Ok(())
-        })
-    }
-}
-
-enum TriggerType {
-    Response,
-    Fire,
-}
+clone_trait_object!(Node);
 
 /// Rules of Workflow
 /// 1. Must be able to cancel Workflow with immediate effect

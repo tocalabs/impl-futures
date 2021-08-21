@@ -1,11 +1,13 @@
 use serde::Deserialize;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::iter::Iterator;
+use std::task::Waker;
+use tokio::sync::mpsc::UnboundedSender as Sender;
 use uuid::Uuid;
 
-use super::node::Node;
-
+use crate::node::{types::*, Node};
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Pointer {
@@ -16,19 +18,19 @@ pub struct Pointer {
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Parameter {
-    key: String,
+    pub key: String,
     #[serde(rename = "type")]
     kind: String,
-    value: Value,
+    pub value: Value,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct WorkflowNode {
     #[serde(rename = "type")]
     kind: WorkflowNodeType,
-    id: String,
+    pub id: String,
     pointers: Vec<Pointer>,
-    parameters: Option<Vec<Parameter>>,
+    pub parameters: Option<Vec<Parameter>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -57,16 +59,11 @@ pub enum WorkflowNodeStatus {
 #[derive(PartialEq, Deserialize, Debug, Clone)]
 pub enum WorkflowNodeType {
     Start,
-    JobArgs,
     Parallel,
     Exclusive,
     Activity,
-    Error,
-    Output,
     Trigger,
     End,
-    Label,
-    StatelessAction,
 }
 
 #[derive(PartialEq, Deserialize, Debug)]
@@ -191,23 +188,87 @@ impl Job {
 }
 */
 
-enum IterResult {
+pub enum IterResult {
     Many(Vec<Job>),
     Single(Box<dyn Node>),
 }
-struct Job {
+
+#[derive(Debug)]
+pub struct Job {
     id: String,
     owner_id: String,
     context: Vec<Parameter>,
-    pub current: Vec<Box<dyn Node>>,
+    current: Option<Box<dyn Node>>,
+    cursor_map: HashMap<String, Vec<Pointer>>,
     pub nodes: Vec<Box<dyn Node>>,
     status: JobStatus,
 }
 
-impl Iterator for Workflow {
-    type Item = IterResult;
+impl Job {
+    pub fn new(wf: &Workflow, tx: &Sender<Waker>) -> Self {
+        let mut nodes: Vec<Box<dyn Node>> = Vec::with_capacity(wf.workflow.len());
+        let mut cursor_map: HashMap<String, Vec<Pointer>> = HashMap::new();
+        for node in wf.workflow.iter() {
+            match node.kind {
+                WorkflowNodeType::Start => {
+                    nodes.push(Box::new(Start::new(node)));
+                }
+                WorkflowNodeType::Parallel => {}
+                WorkflowNodeType::Exclusive => {}
+                WorkflowNodeType::Activity => {
+                    nodes.push(Box::new(Activity::new(node, tx)));
+                }
+                WorkflowNodeType::Trigger => {}
+                WorkflowNodeType::End => {
+                    nodes.push(Box::new(End::new(node)));
+                }
+            }
+            cursor_map.insert(node.id.clone(), node.pointers.clone());
+        }
+        Job {
+            id: Uuid::new_v4().to_string(),
+            owner_id: wf.associated_user_id.clone(),
+            context: vec![],
+            current: None,
+            cursor_map,
+            nodes,
+            status: JobStatus::NotStarted,
+        }
+    }
+}
+
+impl Iterator for Job {
+    type Item = Box<dyn Node>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!()
+        match &self.current {
+            // None indicates workflow hasn't started yet
+            None => {
+                let start = self
+                    .nodes
+                    .iter()
+                    .find(|x| x.kind() == WorkflowNodeType::Start)?
+                    .clone();
+                self.current = Some(start.clone());
+                Some(start)
+            }
+            Some(t) => {
+                let node_id = t.id();
+                let pointers = self.cursor_map.get(node_id).unwrap();
+                let mut next = None;
+                for pointer in pointers.iter() {
+                    let next_id = &pointer.points_to;
+                    let next_node = self
+                        .nodes
+                        .iter()
+                        .find(|x| x.id() == next_id)
+                        .unwrap()
+                        .clone();
+                    self.current = Some(next_node.clone());
+                    next = Some(next_node);
+                }
+                next
+            }
+        }
     }
 }
