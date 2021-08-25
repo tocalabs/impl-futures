@@ -1,9 +1,7 @@
 use super::{Node, NodeError};
 use crate::workflow::{WorkflowNode, WorkflowNodeType};
 use async_trait::async_trait;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll, Waker};
+use std::task::Waker;
 use tokio::sync::mpsc::UnboundedSender as Sender;
 
 #[derive(Clone, Debug)]
@@ -31,7 +29,7 @@ pub struct Parallel {
 pub struct Exclusive {
     id: String,
 }
-
+/*
 enum FutureStatus {
     Start,
     RequestSent,
@@ -68,6 +66,8 @@ impl Future for ActivityFuture {
         }
     }
 }
+
+*/
 
 impl Start {
     pub fn new(wf: &WorkflowNode) -> Self {

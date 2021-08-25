@@ -188,11 +188,6 @@ impl Job {
 }
 */
 
-pub enum IterResult {
-    Many(Vec<Job>),
-    Single(Box<dyn Node>),
-}
-
 #[derive(Debug)]
 pub struct Job {
     id: String,
