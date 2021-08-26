@@ -1,7 +1,10 @@
 use super::{Node, NodeError};
+use crate::reactor::{Event, EventType};
 use crate::workflow::{WorkflowNode, WorkflowNodeType};
 use async_trait::async_trait;
-use std::task::Waker;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use tokio::sync::mpsc::UnboundedSender as Sender;
 
 #[derive(Clone, Debug)]
@@ -19,7 +22,7 @@ pub struct Activity {
     activity_id: String,
     description: String,
     fail_on_error: bool,
-    waker_tx: Sender<Waker>,
+    waker_tx: Sender<Event>,
 }
 #[derive(Clone, Debug)]
 pub struct Parallel {
@@ -29,7 +32,7 @@ pub struct Parallel {
 pub struct Exclusive {
     id: String,
 }
-/*
+
 enum FutureStatus {
     Start,
     RequestSent,
@@ -58,7 +61,15 @@ impl Future for ActivityFuture {
             FutureStatus::Start => {
                 let waker = cx.waker().clone();
                 let tx = me.activity.waker_tx.clone();
-                tx.send(waker).unwrap();
+                let event = Event::new(
+                    Some(waker),
+                    EventType::Activity {
+                        activity_id: me.activity.activity_id.clone(),
+                    },
+                );
+                tx.send(event)
+                    .expect("Unable to send error! Failing workflow");
+
                 me.state = FutureStatus::RequestSent;
                 Poll::Pending
             }
@@ -66,8 +77,6 @@ impl Future for ActivityFuture {
         }
     }
 }
-
-*/
 
 impl Start {
     pub fn new(wf: &WorkflowNode) -> Self {
@@ -107,7 +116,7 @@ impl Node for End {
 }
 
 impl Activity {
-    pub fn new(wf: &WorkflowNode, waker_channel: &Sender<Waker>) -> Self {
+    pub fn new(wf: &WorkflowNode, waker_channel: &Sender<Event>) -> Self {
         let mut activity_id: Option<String> = None;
         let mut description: Option<String> = None;
         let mut fail_on_error: Option<bool> = None;
@@ -138,9 +147,8 @@ impl Node for Activity {
         &self.id
     }
     async fn run(&self) -> Result<(), NodeError> {
-        //let future = ActivityFuture::new(self);
-        // let future = tokio::time::sleep(std::time::Duration::from_secs(5));
-        // future.await;
+        let future = ActivityFuture::new(self);
+        future.await;
         Ok(())
     }
 }

@@ -3,11 +3,12 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::iter::Iterator;
-use std::task::Waker;
 use tokio::sync::mpsc::UnboundedSender as Sender;
 use uuid::Uuid;
 
 use crate::node::{types::*, Node};
+use crate::reactor::Event;
+
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Pointer {
@@ -200,7 +201,7 @@ pub struct Job {
 }
 
 impl Job {
-    pub fn new(wf: &Workflow, tx: &Sender<Waker>) -> Self {
+    pub fn new(wf: &Workflow, tx: &Sender<Event>) -> Self {
         let mut nodes: Vec<Box<dyn Node>> = Vec::with_capacity(wf.workflow.len());
         let mut cursor_map: HashMap<String, Vec<Pointer>> = HashMap::new();
         for node in wf.workflow.iter() {
