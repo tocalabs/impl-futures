@@ -1,11 +1,10 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::task::Waker;
-use tokio::sync::mpsc::UnboundedReceiver as Receiver;
-use tokio::sync::Mutex;
+use std::time::Duration;
 
 use rand::Rng;
-use std::time::Duration;
+use tokio::sync::mpsc::UnboundedReceiver as Receiver;
 
 #[derive(Debug, Clone)]
 pub enum EventType {
@@ -28,7 +27,7 @@ impl Event {
 
 pub struct Reactor {
     events_rx: Receiver<Event>,
-    events: Arc<Mutex<HashMap<String, Event>>>,
+    pub events: Arc<Mutex<HashMap<String, Event>>>,
 }
 
 impl Reactor {
@@ -47,15 +46,23 @@ impl Reactor {
 }
 
 async fn register_event(reactor: &mut Reactor, event: Event) {
-    // let mut rng = rand::rngs::OsRng::default();
-    // let rand_delay = rng.gen_range(0..=10);
+    let mut rng = rand::rngs::OsRng::default();
+    let rand_delay = rng.gen_range(0..=60000);
     let cloned_waker = event.waker.clone();
     {
-        let mut lock = reactor.events.lock().await;
-        lock.insert("".to_string(), event);
+        match reactor.events.lock() {
+            Ok(ref mut lock) => {
+                lock.insert("".to_string(), event);
+            }
+            Err(_) => {
+                panic!("Poisoned Mutex! - Failing");
+            }
+        }
     }
-    if let Some(waker) = cloned_waker {
-        //tokio::time::sleep(Duration::from_secs(rand_delay as u64)).await;
-        waker.wake()
-    }
+    tokio::task::spawn(async move {
+        if let Some(waker) = cloned_waker {
+            tokio::time::sleep(Duration::from_millis(rand_delay as u64)).await;
+            waker.wake()
+        }
+    });
 }

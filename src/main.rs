@@ -16,12 +16,11 @@ async fn main() -> Result<(), io::Error> {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
     let arc_wf = Arc::new(wf);
     let mut tasks = Vec::with_capacity(10000);
-    let reactor_handle = tokio::task::spawn(async move {
-        let mut inner_reactor: Reactor = reactor::Reactor::new(rx);
-        inner_reactor.run().await
-    });
+    let mut inner_reactor: Reactor = reactor::Reactor::new(rx);
+    let event_cp = inner_reactor.events.clone();
+    let reactor_handle = tokio::task::spawn(async move { inner_reactor.run().await });
     let start = std::time::Instant::now();
-    for _ in 0..10000 {
+    for _ in 1..=10000 {
         let wf = arc_wf.clone();
         let cloned_tx = tx.clone();
         tasks.push(tokio::spawn(async move {
@@ -33,7 +32,7 @@ async fn main() -> Result<(), io::Error> {
     }
 
     join_all(tasks).await;
-    println!("{:#?}", start.elapsed() / 10000);
+    println!("{:#?}", start.elapsed());
     drop(tx);
     let _ = reactor_handle.await;
 
