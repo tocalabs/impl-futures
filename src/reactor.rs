@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::task::Waker;
-use std::time::Duration;
 
-use rand::Rng;
 use tokio::sync::mpsc::UnboundedReceiver as Receiver;
 
 #[derive(Debug, Clone)]
@@ -46,8 +44,6 @@ impl Reactor {
 }
 
 async fn register_event(reactor: &mut Reactor, event: Event) {
-    let mut rng = rand::rngs::OsRng::default();
-    let rand_delay = rng.gen_range(0..=60000);
     let cloned_waker = event.waker.clone();
     {
         match reactor.events.lock() {
@@ -59,10 +55,8 @@ async fn register_event(reactor: &mut Reactor, event: Event) {
             }
         }
     }
-    tokio::task::spawn(async move {
-        if let Some(waker) = cloned_waker {
-            tokio::time::sleep(Duration::from_millis(rand_delay as u64)).await;
-            waker.wake()
-        }
-    });
+
+    if let Some(waker) = cloned_waker {
+        waker.wake()
+    }
 }
