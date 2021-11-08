@@ -3,13 +3,16 @@ mod node;
 mod reactor;
 mod workflow;
 
-use crate::reactor::Reactor;
+use crate::reactor::{Event, Reactor};
 use crate::workflow::Job;
-use futures::future::join_all;
+use futures::StreamExt;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::str::from_utf8;
+use std::sync::{Arc, Mutex};
 use tokio::fs;
-
+use tokio::select;
+use tokio::task;
+use tokio_nats;
 type Sender<T> = tokio::sync::mpsc::UnboundedSender<T>;
 
 /// The EE should be split into 2 main parts
@@ -32,7 +35,7 @@ type Sender<T> = tokio::sync::mpsc::UnboundedSender<T>;
 
 /// The Executor is responsible for running each job and also the ability to cancel each job
 ///
-/// ```
+/// ```rs
 /// while let Some(msg) = nats.subscriber("job.*").next().await {
 ///     match msg.topic {
 ///         "job.execute" => {}
@@ -40,22 +43,49 @@ type Sender<T> = tokio::sync::mpsc::UnboundedSender<T>;
 ///     }
 /// }
 /// ```
-struct Executor<T> {
-    reactor_channel: Sender<T>,
-    jobs: HashMap<String, tokio::sync::oneshot::Sender<bool>>,
+struct Executor {
+    reactor_channel: Sender<Event>,
+    jobs: HashMap<String, tokio::sync::oneshot::Sender<()>>,
 }
 
-impl<T> Executor<T> {
-    async fn spawn_job(&self, workflow_id: &str) -> Result<(), io::Error> {
+impl Executor {
+    fn new(tx: Sender<Event>) -> Self {
+        Self {
+            reactor_channel: tx,
+            jobs: HashMap::new(),
+        }
+    }
+    async fn spawn_job(
+        job_store: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<()>>>>,
+        reactor_channel: Sender<Event>,
+        workflow_id: String,
+    ) -> Result<(), io::Error> {
         let wf_json = fs::read_to_string(workflow_id).await?;
-
-        // select!(task::spawn -> job, cancellation token);
+        let wf: workflow::Workflow = serde_json::from_str(&wf_json)?;
+        let (canceller, received) = tokio::sync::oneshot::channel::<()>();
+        let job_id = String::from("abc");
+        {
+            job_store
+                .lock()
+                .expect("Mutex broken")
+                .insert(job_id, canceller);
+        }
+        let job_wrapper = async move {
+            let job = Job::new(&wf, &reactor_channel);
+            for element in job {
+                element.run().await.unwrap();
+            }
+        };
+        select!(
+            _ = job_wrapper => {}
+            _ = received => {}
+        );
         Ok(())
     }
     async fn cancel_job(&mut self, job_id: &str) -> Result<(), io::Error> {
         if let Some(cancellation) = self.jobs.remove(job_id) {
             cancellation
-                .send(true)
+                .send(())
                 .expect("Job was unable to be cancelled, Receiver dropped");
         }
         Ok(())
@@ -64,27 +94,27 @@ impl<T> Executor<T> {
 
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
-    let wf_json = fs::read_to_string("workflow.json").await?;
-    let wf: workflow::Workflow = serde_json::from_str(&wf_json)?;
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-    let arc_wf = Arc::new(wf);
-    let mut inner_reactor: Reactor = reactor::Reactor::new(rx);
-    let event_cp = inner_reactor.events.clone();
-    let reactor_handle = tokio::task::spawn(async move { inner_reactor.run().await });
-    let start = std::time::Instant::now();
-    for _ in 1..=10000 {
-        let wf = arc_wf.clone();
-        let cloned_tx = tx.clone();
-        tokio::spawn(async move {
-            let job = Job::new(&wf, &cloned_tx);
-            for element in job {
-                element.run().await.unwrap();
-            }
-        });
-    }
-
-    println!("{:#?}", start.elapsed() / 10_000 / 3);
-    drop(tx);
-    let _ = reactor_handle.await;
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Event>();
+    let mut executor = Executor::new(tx);
+    let job_store = Arc::new(Mutex::new(executor.jobs));
+    let server = tokio_nats::Nats::connect("127.0.0.1:9123").await?;
+    let mut execution_subscriber = server.subscribe("jobs.execute").await?;
+    let mut cancellation_subscriber = server.subscribe("jobs.cancel").await?;
+    let execute_job_store = job_store.clone();
+    let rc = executor.reactor_channel.clone();
+    tokio::task::spawn(async move {
+        while let Some(msg) = execution_subscriber.next().await {
+            println!("woah");
+            let wf_id = from_utf8(&msg.payload)
+                .expect("Message should be able to be decoded to a string")
+                .to_string();
+            let wf_clone = wf_id.clone();
+            let _ = task::spawn(Executor::spawn_job(
+                execute_job_store.clone(),
+                rc.clone(),
+                wf_clone,
+            ));
+        }
+    });
     Ok(())
 }
