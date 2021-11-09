@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::str::from_utf8;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::fs;
 use tokio::select;
 use tokio::sync::RwLock;
@@ -63,19 +64,24 @@ impl Executor {
     }
 }
 
+enum SpawnerMsg {
+    Execute(String),
+    Cancel(String),
+}
+
 /// Create Handlers
 ///
 ///
 struct Spawner {
     reactor_channel: tokio::sync::mpsc::Sender<Event>,
-    rx: tokio::sync::mpsc::Receiver<String>,
+    rx: tokio::sync::mpsc::Receiver<SpawnerMsg>,
     jobs: Arc<RwLock<HashMap<String, tokio::sync::oneshot::Sender<()>>>>,
 }
 
 impl Spawner {
     fn new(
         rc: tokio::sync::mpsc::Sender<Event>,
-        listener: tokio::sync::mpsc::Receiver<String>,
+        listener: tokio::sync::mpsc::Receiver<SpawnerMsg>,
     ) -> Self {
         Spawner {
             reactor_channel: rc,
@@ -85,36 +91,45 @@ impl Spawner {
     }
     async fn spawn_job(&mut self) -> Result<(), io::Error> {
         while let Some(msg) = self.rx.recv().await {
-            let cloned_jobs = self.jobs.clone();
-            let rc_clone = self.reactor_channel.clone();
-            task::spawn(async move {
-                let (cancellation_tx, cancellation_rx) = tokio::sync::oneshot::channel::<()>();
-                let mut write_jobs = cloned_jobs.write().await;
-                write_jobs.insert(msg.clone(), cancellation_tx);
-                drop(write_jobs);
-                let execute_fut = async move {
-                    println!("{}", msg);
-                    match fs::read_to_string(msg).await {
-                        Ok(wf_json) => {}
-                        Err(e) => panic!("{}", e),
-                    }
-
-                    // let wf: workflow::Workflow = serde_json::from_str(&wf_json)
-                    //     .unwrap_or_else(|_| panic!("Unable to read JSON: {}", wf_json));
-                    // let job = Job::new(&wf, &rc_clone);
-                    // for element in job {
-                    //     element.run().await.unwrap();
-                    //     println!("Running Node");
-                    // }
-                };
-                execute_fut.await;
-                // select!(
-                //     _ = execute_fut => {}
-                //     _ = cancellation_rx => {
-                //         println!("The job was cancelled");
-                //     }
-                // );
-            });
+            match msg {
+                SpawnerMsg::Execute(file) => {
+                    let cloned_jobs = self.jobs.clone();
+                    let rc_clone = self.reactor_channel.clone();
+                    task::spawn(async move {
+                        let (cancellation_tx, cancellation_rx) =
+                            tokio::sync::oneshot::channel::<()>();
+                        let mut write_jobs = cloned_jobs.write().await;
+                        write_jobs.insert(file.clone(), cancellation_tx);
+                        drop(write_jobs);
+                        let execute_fut = async move {
+                            println!("{}", file);
+                            let wf_json = fs::read_to_string(file)
+                                .await
+                                .expect("Unable to read workflow file");
+                            let wf: workflow::Workflow = serde_json::from_str(&wf_json)
+                                .unwrap_or_else(|_| panic!("Unable to read JSON: {}", wf_json));
+                            let job = Job::new(&wf, &rc_clone);
+                            for element in job {
+                                element.run().await.unwrap();
+                                println!("Running Node");
+                                tokio::time::sleep(Duration::from_secs(2)).await;
+                            }
+                        };
+                        select!(
+                            _ = execute_fut => {}
+                            _ = cancellation_rx => {
+                                println!("The job was cancelled");
+                            }
+                        );
+                    });
+                }
+                SpawnerMsg::Cancel(job_id) => {
+                    let mut n = self.jobs.write().await;
+                    let cancellation_token =
+                        n.remove(&job_id).expect("Job Doesn't exist to cancel");
+                    cancellation_token.send(());
+                }
+            }
         }
         Ok(())
     }
@@ -140,7 +155,7 @@ async fn main() -> Result<(), io::Error> {
         reactor.run().await;
     });
     // create spawner channel
-    let (spawn_tx, spawn_rx) = tokio::sync::mpsc::channel::<String>(20);
+    let (spawn_tx, spawn_rx) = tokio::sync::mpsc::channel::<SpawnerMsg>(20);
     // Create Spawner
     let mut spawner = Spawner::new(reactor_tx.clone(), spawn_rx);
     let spawner_handle = task::spawn(async move {
@@ -151,7 +166,7 @@ async fn main() -> Result<(), io::Error> {
     });
 
     spawn_tx
-        .send("/home/james/PersonalProjects/future-impl/target/debug/workflow.json".to_string())
+        .send(SpawnerMsg::Execute("workflow.json".to_string()))
         .await;
     /*
     // Connect to NATs server
@@ -160,5 +175,12 @@ async fn main() -> Result<(), io::Error> {
     let mut execution_subscriber = server.subscribe("jobs.execute").await?;
     let mut cancellation_subscriber = server.subscribe("jobs.cancel").await?;
      */
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    spawn_tx
+        .send(SpawnerMsg::Cancel("worfklow.json".to_string()))
+        .await;
+    // Await the handles to reactor and spawner to make sure all tasks run to completion
+    reactor_handle.await;
+    spawner_handle.await;
     Ok(())
 }
