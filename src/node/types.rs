@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio::sync::mpsc::UnboundedSender as Sender;
+use tokio::sync::mpsc::Sender;
 
 #[derive(Clone, Debug)]
 pub struct Start {
@@ -67,7 +67,7 @@ impl Future for ActivityFuture {
                         activity_id: me.activity.activity_id.clone(),
                     },
                 );
-                tx.send(event)
+                tx.try_send(event)
                     .expect("Unable to send error! Failing workflow");
 
                 me.state = FutureStatus::RequestSent;

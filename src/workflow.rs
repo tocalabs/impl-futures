@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::iter::Iterator;
-use tokio::sync::mpsc::UnboundedSender as Sender;
+use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
 
 use crate::node::{types::*, Node};

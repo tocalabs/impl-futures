@@ -510,6 +510,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nuid"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7000c9392b545c4ba43e8abc086bf7d01cd2948690934c16980170b0549a2bd3"
+dependencies = [
+ "lazy_static",
+ "rand",
+]
+
+[[package]]
 name = "num_cpus"
 version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -963,6 +973,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "nom",
+ "nuid",
  "serde",
  "serde_json",
  "tokio",

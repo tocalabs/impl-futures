@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::task::Waker;
 
-use tokio::sync::mpsc::UnboundedReceiver as Receiver;
+use tokio::sync::mpsc::Receiver;
 
 #[derive(Debug, Clone)]
 pub enum EventType {
