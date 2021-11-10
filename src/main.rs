@@ -75,7 +75,7 @@ enum SpawnerMsg {
 struct Spawner {
     reactor_channel: tokio::sync::mpsc::Sender<Event>,
     rx: tokio::sync::mpsc::Receiver<SpawnerMsg>,
-    jobs: Arc<RwLock<HashMap<String, tokio::sync::oneshot::Sender<()>>>>,
+    jobs: Arc<Mutex<HashMap<String, tokio::sync::oneshot::Sender<()>>>>,
 }
 
 impl Spawner {
@@ -86,7 +86,7 @@ impl Spawner {
         Spawner {
             reactor_channel: rc,
             rx: listener,
-            jobs: Arc::new(RwLock::new(HashMap::new())),
+            jobs: Arc::new(Mutex::new(HashMap::new())),
         }
     }
     async fn spawn_job(&mut self) -> Result<(), io::Error> {
@@ -95,12 +95,11 @@ impl Spawner {
                 SpawnerMsg::Execute(file) => {
                     let cloned_jobs = self.jobs.clone();
                     let rc_clone = self.reactor_channel.clone();
+                    let (cancellation_tx, cancellation_rx) = tokio::sync::oneshot::channel::<()>();
+                    let mut write_jobs = cloned_jobs.lock().expect("Locking failed");
+                    write_jobs.insert(file.clone(), cancellation_tx);
+                    drop(write_jobs);
                     task::spawn(async move {
-                        let (cancellation_tx, cancellation_rx) =
-                            tokio::sync::oneshot::channel::<()>();
-                        let mut write_jobs = cloned_jobs.write().await;
-                        write_jobs.insert(file.clone(), cancellation_tx);
-                        drop(write_jobs);
                         let execute_fut = async move {
                             println!("{}", file);
                             let wf_json = fs::read_to_string(file)
@@ -124,10 +123,11 @@ impl Spawner {
                     });
                 }
                 SpawnerMsg::Cancel(job_id) => {
-                    let mut n = self.jobs.write().await;
-                    let cancellation_token =
-                        n.remove(&job_id).expect("Job Doesn't exist to cancel");
-                    cancellation_token.send(());
+                    let cloned_jobs = self.jobs.clone();
+                    let mut n = cloned_jobs.lock().expect("Failed to lock");
+                    if let Some(sender) = n.remove(&job_id) {
+                        sender.send(());
+                    }
                 }
             }
         }
@@ -177,7 +177,7 @@ async fn main() -> Result<(), io::Error> {
      */
     tokio::time::sleep(Duration::from_secs(3)).await;
     spawn_tx
-        .send(SpawnerMsg::Cancel("worfklow.json".to_string()))
+        .send(SpawnerMsg::Cancel("workflow.json".to_string()))
         .await;
     // Await the handles to reactor and spawner to make sure all tasks run to completion
     reactor_handle.await;
