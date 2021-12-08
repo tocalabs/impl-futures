@@ -36,7 +36,7 @@ type Sender<T> = tokio::sync::mpsc::Sender<T>;
 /// waiting for an Activity to complete) it should yield execution using the underlying mechanics
 /// of rust's async/await.
 ///
-
+///
 /// The Executor is responsible for running each job and also the ability to cancel each job
 ///
 /// ```rs
@@ -115,7 +115,9 @@ impl Spawner {
                             }
                         };
                         select!(
-                            _ = execute_fut => {}
+                            _ = execute_fut => {
+                                println!("The job has completed!")
+                            }
                             _ = cancellation_rx => {
                                 println!("The job was cancelled");
                             }
@@ -175,10 +177,10 @@ async fn main() -> Result<(), io::Error> {
     let mut execution_subscriber = server.subscribe("jobs.execute").await?;
     let mut cancellation_subscriber = server.subscribe("jobs.cancel").await?;
      */
-    tokio::time::sleep(Duration::from_secs(3)).await;
-    spawn_tx
-        .send(SpawnerMsg::Cancel("workflow.json".to_string()))
-        .await;
+    //tokio::time::sleep(Duration::from_secs(3)).await;
+    // spawn_tx
+    //     .send(SpawnerMsg::Cancel("workflow.json".to_string()))
+    //     .await;
     // Await the handles to reactor and spawner to make sure all tasks run to completion
     reactor_handle.await;
     spawner_handle.await;
