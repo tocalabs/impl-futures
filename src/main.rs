@@ -184,3 +184,21 @@ async fn main() -> Result<(), io::Error> {
     spawner_handle.await;
     Ok(())
 }
+
+#[cfg(test)]
+mod exclusive_tests {
+
+    #[test]
+    fn test_eval() {
+        use eval::{eval, to_value, Expr};
+        let expression = "(foo == bar) || (spam != eggs)";
+        let evaluation = Expr::new(expression)
+            .value("foo", "hi")
+            .value("bar", "ho")
+            .value("spam", 4)
+            .value("eggs", 45)
+            .exec();
+        //         assert_eq!(evaluation, Ok(to_value(false)));
+        assert_eq!(evaluation, Ok(to_value(true)));
+    }
+}
