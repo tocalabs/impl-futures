@@ -15,12 +15,6 @@ pub enum SpawnerMsg {
     Cancel(String),
 }
 
-pub struct Spawner {
-    reactor_channel: Sender<Event>,
-    rx: Receiver<SpawnerMsg>,
-    jobs: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
-}
-
 pub fn spawner_channel() -> (Sender<SpawnerMsg>, Receiver<SpawnerMsg>) {
     tokio::sync::mpsc::channel::<SpawnerMsg>(20)
 }
@@ -31,6 +25,12 @@ pub fn execute_msg(wf_id: &str) -> SpawnerMsg {
 
 pub fn cancel_msg(job_id: &str) -> SpawnerMsg {
     SpawnerMsg::Cancel(job_id.to_string())
+}
+
+pub struct Spawner {
+    reactor_channel: Sender<Event>,
+    rx: Receiver<SpawnerMsg>,
+    jobs: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
 }
 
 impl Spawner {
@@ -51,9 +51,10 @@ impl Spawner {
                     let cloned_jobs = self.jobs.clone();
                     let rc_clone = self.reactor_channel.clone();
                     let (cancellation_tx, cancellation_rx) = tokio::sync::oneshot::channel::<()>();
-                    let mut write_jobs = cloned_jobs.lock().expect("Locking failed");
-                    write_jobs.insert(file.clone(), cancellation_tx);
-                    drop(write_jobs);
+                    {
+                        let mut write_jobs = cloned_jobs.lock().expect("Locking failed");
+                        write_jobs.insert(file.clone(), cancellation_tx);
+                    }
                     task::spawn(async move {
                         select!(
                             _ = executor::execute_handler(&file, rc_clone) => {

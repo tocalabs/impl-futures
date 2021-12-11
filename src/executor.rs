@@ -15,7 +15,7 @@ pub async fn execute_handler(file: &str, rc_clone: Sender<Event>) -> Result<(), 
     for element in job {
         element.run().await.unwrap();
         println!("Running Node");
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        //tokio::time::sleep(Duration::from_secs(2)).await;
     }
     Ok(())
 }

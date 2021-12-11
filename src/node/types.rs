@@ -1,16 +1,20 @@
-use super::{Node, NodeError};
-use crate::reactor::{Event, EventType};
-use crate::workflow::{WorkflowNode, WorkflowNodeType};
-use async_trait::async_trait;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+
+use async_trait::async_trait;
 use tokio::sync::mpsc::Sender;
+
+use crate::reactor::Event;
+use crate::workflow::{WorkflowNode, WorkflowNodeType};
+
+use super::{Node, NodeError};
 
 #[derive(Clone, Debug)]
 pub struct Start {
     id: String,
 }
+
 #[derive(Clone, Debug)]
 pub struct End {
     id: String,
@@ -24,10 +28,12 @@ pub struct Activity {
     fail_on_error: bool,
     waker_tx: Sender<Event>,
 }
+
 #[derive(Clone, Debug)]
 pub struct Parallel {
     id: String,
 }
+
 #[derive(Clone, Debug)]
 pub struct Exclusive {
     id: String,
@@ -61,12 +67,11 @@ impl Future for ActivityFuture {
             FutureStatus::Start => {
                 let waker = cx.waker().clone();
                 let tx = me.activity.waker_tx.clone();
-                let event = Event::new(
-                    Some(waker),
-                    EventType::Activity {
-                        activity_id: me.activity.activity_id.clone(),
-                    },
-                );
+                let event = Event::Activity {
+                    node_id: uuid::Uuid::new_v4().to_string(),
+                    activity_id: me.activity.activity_id.clone(),
+                    waker,
+                };
                 tx.try_send(event)
                     .expect("Unable to send error! Failing workflow");
 
@@ -83,6 +88,7 @@ impl Start {
         Start { id: wf.id.clone() }
     }
 }
+
 #[async_trait]
 impl Node for Start {
     fn kind(&self) -> WorkflowNodeType {

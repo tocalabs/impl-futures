@@ -11,6 +11,8 @@ mod reactor;
 mod spawner;
 mod workflow;
 
+/// Todo: Add Bot, separate reactor to different binary, add exclusive logic, enum iterator return type
+
 /// The EE should be split into 2 main parts
 /// 1. Executor - This is responsible for driving the workflows to completion and should contain
 ///    all the objects required for each workflow to be executed, think of this as a runtime.
@@ -44,9 +46,9 @@ async fn main() -> Result<(), io::Error> {
     // Create reactor channel
     let (reactor_tx, reactor_rx) = tokio::sync::mpsc::channel::<Event>(20);
     // Create Reactor
-    let mut reactor = Reactor::new(reactor_rx);
+    let reactor = Reactor::new();
     let reactor_handle = task::spawn(async move {
-        reactor.run().await;
+        reactor.run(reactor_rx).await;
     });
     // create spawner channel
     let (spawn_tx, spawn_rx) = spawner::spawner_channel();
@@ -67,8 +69,8 @@ async fn main() -> Result<(), io::Error> {
     let mut execution_subscriber = server.subscribe("jobs.execute").await?;
     let mut cancellation_subscriber = server.subscribe("jobs.cancel").await?;
      */
-    tokio::time::sleep(Duration::from_secs(3)).await;
-    spawn_tx.send(spawner::cancel_msg("workflow.json")).await;
+    // tokio::time::sleep(Duration::from_secs(3)).await;
+    // spawn_tx.send(spawner::cancel_msg("workflow.json")).await;
     // Await the handles to reactor and spawner to make sure all tasks run to completion
     reactor_handle.await;
     spawner_handle.await;
