@@ -18,11 +18,7 @@ async fn main() -> Result<(), io::Error> {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             let _ = client_clone
                 .clone()
-                .publish(
-                    tokio_nats::Msg::builder("activity.response")
-                        .json(from_utf8(&msg.payload).expect("Unable to decode msg"))
-                        .expect("Unable to construct message"),
-                )
+                .publish(tokio_nats::Msg::builder("activity.response").bytes(msg.payload))
                 .await
                 .expect("Unable to send response");
         });

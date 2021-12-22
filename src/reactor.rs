@@ -44,8 +44,7 @@ impl Reactor {
                 let move_msg = msg;
                 let node_id: String =
                     from_str::<String>(from_utf8(&move_msg.payload).expect("Unable to read msg"))
-                        .expect("Unable to deserialize to string")
-                        .replace(r#"""#, ""); //Not sure why I have to do this - todo: investigate
+                        .expect("Unable to deserialize to string");
                 let mut inner = response_collection.lock().expect("Locking failed");
                 if let Some(waker) = inner.remove(&node_id) {
                     waker.wake();
