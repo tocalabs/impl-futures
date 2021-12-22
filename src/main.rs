@@ -11,7 +11,7 @@ mod reactor;
 mod spawner;
 mod workflow;
 
-/// Todo: Add Bot, separate reactor to different binary, add exclusive logic, enum iterator return type
+/// Todo: Add Bot, add exclusive logic, enum iterator return type
 
 /// The EE should be split into 2 main parts
 /// 1. Executor - This is responsible for driving the workflows to completion and should contain
