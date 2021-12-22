@@ -64,21 +64,16 @@ async fn register_event(
     match event {
         Event::Activity {
             node_id,
-            activity_id,
+            activity_id: _activity_id,
             waker,
         } => {
             {
                 let mut inner = event_collection.lock().expect("Locking failed");
                 inner.insert(node_id.clone(), waker.clone());
             }
-            // Change this waker.wake() to be a NATs send msg to Bot for activity execution
-            // Get Activity
-            // Execute Activity
             let _ = nats_client
                 .publish(tokio_nats::Msg::builder("activity.execute").json(&node_id)?)
                 .await?;
-
-            //waker.wake();
         }
     }
     Ok(())
