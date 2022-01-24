@@ -1,5 +1,4 @@
 use std::io;
-use std::time::Duration;
 
 use tokio::task;
 
@@ -36,8 +35,8 @@ mod workflow;
 /// ```rs
 /// while let Some(msg) = nats.subscriber("job.*").next().await {
 ///     match msg.topic {
-///         "job.execute" => {}
-///         "job.cancel" => {}
+///         "job.execute" => {...}
+///         "job.cancel" => {...}
 ///     }
 /// }
 /// ```
@@ -48,7 +47,7 @@ async fn main() -> Result<(), io::Error> {
     // Create Reactor
     let reactor = Reactor::new();
     let reactor_handle = task::spawn(async move {
-        reactor.run(reactor_rx).await;
+        let _ = reactor.run(reactor_rx).await;
     });
     // create spawner channel
     let (spawn_tx, spawn_rx) = spawner::spawner_channel();
@@ -61,7 +60,7 @@ async fn main() -> Result<(), io::Error> {
             .expect("Something went critically wrong");
     });
 
-    spawn_tx.send(spawner::execute_msg("workflow.json")).await;
+    let _ = spawn_tx.send(spawner::execute_msg("workflow.json")).await;
     /*
     // Connect to NATs server
     let server = tokio_nats::Nats::connect("127.0.0.1:9123").await?;
@@ -72,8 +71,7 @@ async fn main() -> Result<(), io::Error> {
     // tokio::time::sleep(Duration::from_secs(3)).await;
     // spawn_tx.send(spawner::cancel_msg("workflow.json")).await;
     // Await the handles to reactor and spawner to make sure all tasks run to completion
-    reactor_handle.await;
-    spawner_handle.await;
+    let _ = (reactor_handle.await, spawner_handle.await);
     Ok(())
 }
 
