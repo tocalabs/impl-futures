@@ -1,3 +1,4 @@
+use eval::{to_value, Expr};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -67,129 +68,14 @@ pub enum WorkflowNodeType {
     End,
 }
 
-#[derive(PartialEq, Deserialize, Debug)]
+#[derive(PartialEq, Deserialize, Debug, Clone)]
 pub enum JobStatus {
     NotStarted,
     Processing,
     Finished,
 }
 
-/*
-#[derive(Deserialize, Debug, PartialEq, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Node {
-    pub id: String,
-    node_id: String,
-    parameters: Vec<Parameter>,
-    activity_id: Option<String>,
-    bot_id: Option<String>,
-    #[serde(rename = "type")]
-    kind: WorkflowNodeType,
-    pub pointers: Vec<Pointer>,
-}
-
-impl Node {
-    fn new(wf_node: WorkflowNode) -> Self {
-        let mut activity_id: Option<String> = None;
-        let params = match wf_node.parameters {
-            Some(params) => {
-                activity_id = params.iter().find(|x| x.key == "ActivityId").map(|param| {
-                    serde_json::from_value::<String>(param.value.clone())
-                        .expect("Unable to deserialize Activity Id")
-                });
-                params
-            }
-            None => vec![],
-        };
-        Node {
-            id: Uuid::new_v4().to_string(),
-            node_id: wf_node.id,
-            parameters: params,
-            activity_id,
-            bot_id: None,
-            kind: wf_node.kind,
-            pointers: wf_node.pointers,
-        }
-    }
-    pub fn next(&self, nodes: &[Node]) -> Vec<Node> {
-        let next_ids: Vec<String> = self.pointers.iter().cloned().map(|x| x.points_to).collect();
-        nodes
-            .iter()
-            .cloned()
-            .filter(|nd| next_ids.contains(&nd.node_id))
-            .collect()
-    }
-
-    pub fn get_next(&self, job: &mut Job) {
-        job.current
-            .remove(job.current.iter().position(|node| *node == *self).unwrap());
-        let next = self.next(&job.nodes);
-        let mut current_pointers: Vec<String> = vec![];
-        for red in job.current.iter() {
-            current_pointers.append(
-                &mut red
-                    .pointers
-                    .iter()
-                    .cloned()
-                    .map(|x| x.points_to)
-                    .collect::<Vec<String>>(),
-            );
-        }
-        if !next
-            .iter()
-            .any(|nxt| current_pointers.contains(&nxt.node_id))
-        {
-            job.current.extend(next);
-        }
-    }
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Job {
-    id: String,
-    owner_id: String,
-    context: Vec<Parameter>,
-    pub current: Vec<Node>,
-    pub nodes: Vec<Node>,
-    status: JobStatus,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct ExecutionRequest {
-    pub workflow_id: String,
-    pub job_args: Option<Vec<Parameter>>,
-}
-
-impl Job {
-    pub fn new(workflow: Workflow, request: ExecutionRequest) -> Self {
-        let nodes: Vec<Node> = workflow
-            .workflow
-            .iter()
-            .map(|nd| Node::new(nd.clone()))
-            .collect();
-
-        let start_node = nodes
-            .iter()
-            .find(|nd| nd.kind == WorkflowNodeType::Start)
-            .expect("No Start node present!")
-            .clone();
-
-        Job {
-            id: Uuid::new_v4().to_string(),
-            owner_id: workflow.associated_user_id,
-            context: match request.job_args {
-                Some(args) => args,
-                None => vec![],
-            },
-            current: vec![start_node],
-            nodes,
-            status: JobStatus::NotStarted,
-        }
-    }
-}
-*/
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Job {
     id: String,
     owner_id: String,
@@ -233,12 +119,17 @@ impl Job {
     }
 }
 
+pub(crate) enum NextNodes {
+    Single(Box<dyn Node>),
+    Multiple(Vec<Job>),
+}
+
 impl Iterator for Job {
-    type Item = Box<dyn Node>;
+    type Item = NextNodes;
 
     fn next(&mut self) -> Option<Self::Item> {
         match &self.current {
-            // None indicates workflow hasn't started yet
+            // None indicates workflow hasn't started yet so we move onto Start node first
             None => {
                 let start = self
                     .nodes
@@ -246,12 +137,17 @@ impl Iterator for Job {
                     .find(|x| x.kind() == WorkflowNodeType::Start)?
                     .clone();
                 self.current = Some(start.clone());
-                Some(start)
+                Some(NextNodes::Single(start))
             }
+            // Some indicates we have started the job and have processed at least 1 node.
             Some(t) => {
                 let node_id = t.id();
                 let pointers = self.cursor_map.get(node_id).unwrap();
                 let mut next = None;
+                // Nothing to iterate over if current is WorkflowNodeType::End so next will remain
+                // as None
+                let mut multi_nodes: Vec<Box<dyn Node>> = vec![];
+                let borrowed = &mut multi_nodes;
                 for pointer in pointers.iter() {
                     let next_id = &pointer.points_to;
                     let next_node = self
@@ -260,8 +156,33 @@ impl Iterator for Job {
                         .find(|x| x.id() == next_id)
                         .unwrap()
                         .clone();
-                    self.current = Some(next_node.clone());
-                    next = Some(next_node);
+
+                    if t.kind() == WorkflowNodeType::Exclusive {
+                        let evaluation = Expr::new(pointer.expression.as_ref()?).exec();
+                        if evaluation.expect("Unable to evaluate expression") == true {
+                            borrowed.push(next_node.clone());
+                        }
+                    } else {
+                        borrowed.push(next_node.clone());
+                    }
+
+                    if borrowed.len() == 1 {
+                        next = Some(NextNodes::Single(next_node.clone()))
+                    } else if borrowed.len() > 1 {
+                        next = Some(NextNodes::Multiple(
+                            borrowed
+                                .into_iter()
+                                .map(|node| {
+                                    let mut new_job = (*self).clone();
+                                    new_job.current = Some(node.clone());
+                                    new_job
+                                })
+                                .collect::<Vec<Job>>(),
+                        )); // todo: Create jobs
+                    } else {
+                        panic!(format!("Unable to find the next node"));
+                    }
+                    // self.current = Some(next_node.clone()); // "What is going on here?"
                 }
                 next
             }
