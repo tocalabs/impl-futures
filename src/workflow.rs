@@ -214,7 +214,10 @@ pub enum NextNodes {
 
 impl Iterator for Job {
     type Item = NextNodes;
-
+    /// Progress to the next node in the job.
+    ///
+    /// The iterator will return either a single node which is next to be executed or it will
+    /// return a `Vec<Job>` which indicates that there are many to execute
     fn next(&mut self) -> Option<Self::Item> {
         match self.current {
             // None indicates workflow hasn't started yet so we move onto Start node first
@@ -222,61 +225,78 @@ impl Iterator for Job {
                 let start = self
                     .nodes
                     .iter()
-                    .position(|x| x.kind() == WorkflowNodeType::Start)?;
-                self.current = Some(start);
-                Some(NextNodes::Single(self.nodes.get(start)?.clone()))
+                    .position(|x| x.kind() == WorkflowNodeType::Start);
+                self.current = start;
+                Some(NextNodes::Single(self.nodes.get(start?)?.clone()))
             }
             // Some indicates we have started the job and have processed at least 1 node.
             Some(node_index) => {
                 let current_node = self.nodes.get(node_index)?;
                 let node_id = current_node.id();
                 let pointers = self.cursor_map.get(node_id).unwrap();
-                let mut next = None;
                 // Nothing to iterate over if current is WorkflowNodeType::End so next will remain
                 // as None
-                let mut multi_nodes: Vec<Box<dyn Node>> = vec![];
-                let borrowed = &mut multi_nodes;
-                for pointer in pointers.iter() {
-                    let next_id = &pointer.points_to;
-                    let next_node = self
-                        .nodes
-                        .iter()
-                        .find(|x| x.id() == next_id)
-                        .unwrap()
-                        .clone();
-
-                    // If exclusive then check each branch for an expression
-                    if current_node.kind() == WorkflowNodeType::Exclusive {
-                        let evaluation = Expr::new(pointer.expression.as_ref()?).exec();
-                        if evaluation.expect("Unable to evaluate expression") == true {
-                            borrowed.push(next_node.clone());
-                        }
-                    } else {
-                        borrowed.push(next_node.clone());
+                match pointers.len().cmp(&1) {
+                    Ordering::Less => {
+                        // We are on the End node as there are no more pointers
+                        None
                     }
-
-                    match borrowed.len().cmp(&1) {
-                        Ordering::Less => {
-                            panic!("Unable to find the next node");
+                    Ordering::Equal => {
+                        // Only points to one item so we can safely assume the next node is the
+                        // only one being pointed to
+                        self.current = self
+                            .nodes
+                            .iter()
+                            .position(|node| node.id() == pointers[0].points_to);
+                        return Some(NextNodes::Single(self.nodes.get(self.current?)?.clone()));
+                    }
+                    Ordering::Greater => {
+                        // Points to more than one node so we must evaluate the expressions to check
+                        // which nodes we should actually traverse to
+                        let mut valid_pointers: Vec<&str> = vec![];
+                        for pointer in pointers.iter() {
+                            match &pointer.expression {
+                                None => {
+                                    // No expression to evaluate, follow pointer as normal
+                                }
+                                Some(expr) => {
+                                    if Expr::new(expr)
+                                        .exec()
+                                        .expect("Unable to evaluate expression")
+                                        .is_boolean()
+                                    {
+                                        valid_pointers.push(&pointer.points_to);
+                                    }
+                                }
+                            }
                         }
-                        Ordering::Equal => next = Some(NextNodes::Single(next_node.clone())),
-                        Ordering::Greater => {
-                            next = Some(NextNodes::Multiple(
-                                borrowed
-                                    .iter_mut()
-                                    .map(|_node| {
-                                        let mut new_job = Job::new_from_job(self);
-                                        new_job.current = Some(node_index);
-                                        new_job
-                                    })
-                                    .collect::<Vec<Job>>(),
-                            ));
+                        match valid_pointers.len().cmp(&1) {
+                            // If only 1 valid pointer then clearly a single move
+                            Ordering::Equal => {
+                                self.current = self
+                                    .nodes
+                                    .iter()
+                                    .position(|node| node.id() == valid_pointers[0]);
+                                return Some(NextNodes::Single(
+                                    self.nodes.get(self.current?)?.clone(),
+                                ));
+                            }
+                            Ordering::Less => {
+                                // Return error rather than panic
+                                panic!("No expression met - stopping Job");
+                            }
+                            Ordering::Greater => {
+                                // Work out what to return based on what the current node is
+                                // Parallel - return n Jobs which only go up to their closing
+                                //            parallel and set `self.current` as closing parallel
+                                // Exclusive - return n Jobs which contains all nodes then we do a
+                                //             `select!` to finish when the first child reaches
+                                //             the end
+                                todo!();
+                            }
                         }
                     }
-
-                    // self.current = Some(next_node.clone()); // "What is going on here?"
                 }
-                next
             }
         }
     }
