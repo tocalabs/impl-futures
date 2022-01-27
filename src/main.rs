@@ -1,3 +1,31 @@
+//! The EE should be split into 2 main parts
+//! 1. Executor - This is responsible for driving the workflows to completion and should contain
+//!    all the objects required for each workflow to be executed, think of this as a runtime.
+//! 2. Reactor - The reactor is responsible for notifying the executor when a future can make
+//!    progress, this is done via the Waker API.
+//!
+//! When a workflow is sent to the EE, the flow should be as follows:
+//! 1. Spawn a new task which will perform all of the work associated with executing a wf to
+//! completion
+//! 2. Deserialize the workflow into a Job, the Job type should describe the entity as accurately
+//! as possible
+//! 3. Drive the workflow forward, for now it uses an iterator to do so
+//!
+//! When a workflow reaches a point where it cannot make progress (e.g. waiting for Bots to Lock or
+//! waiting for an Activity to complete) it should yield execution using the underlying mechanics
+//! of rust's async/await.
+//!
+//!
+//! The Executor is responsible for running each job and also the ability to cancel each job
+//!
+//! ```rs
+//! while let Some(msg) = nats.subscriber("job.*").next().await {
+//!     match msg.topic {
+//!         "job.execute" => {...}
+//!         "job.cancel" => {...}
+//!     }
+//! }
+//! ```
 use std::io;
 
 use tokio::task;
@@ -12,34 +40,6 @@ mod workflow;
 
 /// Todo: Add Bot, add exclusive logic, enum iterator return type
 
-/// The EE should be split into 2 main parts
-/// 1. Executor - This is responsible for driving the workflows to completion and should contain
-///    all the objects required for each workflow to be executed, think of this as a runtime.
-/// 2. Reactor - The reactor is responsible for notifying the executor when a future can make
-///    progress, this is done via the Waker API.
-///
-/// When a workflow is sent to the EE, the flow should be as follows:
-/// 1. Spawn a new task which will perform all of the work associated with executing a wf to
-/// completion
-/// 2. Deserialize the workflow into a Job, the Job type should describe the entity as accurately
-/// as possible
-/// 3. Drive the workflow forward, for now it uses an iterator to do so
-///
-/// When a workflow reaches a point where it cannot make progress (e.g. waiting for Bots to Lock or
-/// waiting for an Activity to complete) it should yield execution using the underlying mechanics
-/// of rust's async/await.
-///
-///
-/// The Executor is responsible for running each job and also the ability to cancel each job
-///
-/// ```rs
-/// while let Some(msg) = nats.subscriber("job.*").next().await {
-///     match msg.topic {
-///         "job.execute" => {...}
-///         "job.cancel" => {...}
-///     }
-/// }
-/// ```
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
     // Create reactor channel

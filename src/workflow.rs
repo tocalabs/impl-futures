@@ -14,7 +14,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::iter::Iterator;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Receiver, Sender};
 use uuid::Uuid;
 
 use crate::node::{types::*, Node};
@@ -160,6 +160,8 @@ pub struct Job {
 impl Job {
     /// Creates a new Job struct from a Workflow. Also requires the sender to the reactor for any
     /// activity nodes that this will create as part of the Job struct.
+    /// Need to add position as property to each node
+    /// Flatten pointer map to quickly scan for a nodes dependencies
     pub fn new(wf: &Workflow, tx: &Sender<Event>) -> Self {
         let mut nodes: Vec<Box<dyn Node>> = Vec::with_capacity(wf.workflow.len());
         let mut cursor_map: HashMap<String, Vec<Pointer>> = HashMap::new();
@@ -191,18 +193,30 @@ impl Job {
         }
     }
 
-    /// Creates a Job from an existing Job, this is for when a parallel or exclusive is encountered
-    /// and we recursively execute branches of the original job. This branches are represented as
-    /// other jobs which are linked to the original via the `id` field.  
-    fn new_from_job(job: &Self) -> Self {
-        Job {
-            id: job.id.clone(),
-            owner_id: job.owner_id.to_string(),
-            context: job.context.clone(),
-            current: job.current,
-            cursor_map: job.cursor_map.clone(),
-            nodes: job.nodes.clone(),
-            status: job.status.clone(),
+    /// Problem with returning references is that we cannot pass the reference
+    /// across a thread boundary safely so will have to introduce something like an `Arc`
+    /// to satisfy the borrow checker
+    fn next_node(&self, pointer: Option<usize>) -> Option<Vec<&dyn Node>> {
+        if let Some(ptr) = pointer {
+            let current = &**self.nodes.get(ptr)?;
+            let points_to = self.cursor_map.get(current.id())?;
+            let mut next_nodes: Vec<&dyn Node> = vec![];
+            for path in points_to {
+                next_nodes.push(&**self.nodes.iter().find(|x| path.points_to == x.id())?)
+            }
+            if next_nodes.is_empty() && current.kind() == WorkflowNodeType::End {
+                None
+            } else {
+                Some(next_nodes)
+            }
+        } else {
+            Some(vec![
+                &**self
+                    .nodes
+                    .iter()
+                    .find(|x| x.kind() == WorkflowNodeType::Start)?;
+                1
+            ])
         }
     }
 }
@@ -300,4 +314,59 @@ impl Iterator for Job {
             }
         }
     }
+}
+
+/// async Next function
+
+pub enum NodeStatus {
+    Success,
+    Failed,
+}
+
+/// Message is the struct transmitted to the executor to signal the job can make progress
+pub struct Message {
+    /// Index of node sending message
+    pub pointer: usize,
+    /// Status of the node
+    pub status: NodeStatus,
+    /// List of context sent back
+    pub context: Vec<Parameter>,
+}
+
+///```
+/// let tx, rx = mpsc
+/// let job = Job::new(tx) //pass in tx for event based notification for when to progress
+/// //Each node is responsible for notifying the job that it can move forward
+/// //The next node function will need to take a pointer to the current node that has finished
+/// // So it knows where to resume the job from
+/// let next_node = job.next(None); // gets start node at very beginning
+/// next_node.run().await(); // Waiting for start node to complete
+/// while let Some(msg) = rx.recv().await {
+///     match msg.status {
+///         NodeStatus::Failed => { return Err(()) }
+///         NodeStatus::Success => {
+///             match job.next_nodes(msg) {
+///                 Some(nodes) => {}
+///             }
+///             let next_nodes = job.next_nodes(msg); //next_nodes could return multiple jobs
+///             if nodes.len() == 1 {
+///                 node.run().await
+///             }
+///             for node in next_nodes {
+///                 task::spawn(node.run())
+///             }
+///         }
+///     }
+///     
+///     
+/// }
+///```
+///
+
+async fn next_node(job: &Job) -> Result<Box<dyn Node>, ()> {
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(20);
+    while let Some(msg) = rx.recv().await {
+        let node_sender = tx.clone();
+    }
+    Err(())
 }

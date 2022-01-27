@@ -1,11 +1,13 @@
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::AtomicUsize;
 use std::task::{Context, Poll};
 
 use async_trait::async_trait;
 use tokio::sync::mpsc::Sender;
 
 use crate::reactor::Event;
+use crate::workflow;
 use crate::workflow::{WorkflowNode, WorkflowNodeType};
 
 use super::{Node, NodeError};
@@ -13,11 +15,15 @@ use super::{Node, NodeError};
 #[derive(Clone, Debug)]
 pub struct Start {
     id: String,
+    job_channel: Sender<workflow::Message>,
+    position: usize,
 }
 
 #[derive(Clone, Debug)]
 pub struct End {
     id: String,
+    job_channel: Sender<workflow::Message>,
+    position: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -27,16 +33,24 @@ pub struct Activity {
     description: String,
     fail_on_error: bool,
     waker_tx: Sender<Event>,
+    job_channel: Sender<workflow::Message>,
+    position: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Parallel {
     id: String,
+    dependencies: AtomicUsize, // AtomicUsize does not implement Clone so we may have to think carefully about references here
+    dependencies_met: AtomicUsize,
+    exec_tx: Sender<workflow::Message>,
+    position: usize,
 }
 
 #[derive(Clone, Debug)]
 pub struct Exclusive {
     id: String,
+    job_channel: Sender<workflow::Message>,
+    position: usize,
 }
 
 enum FutureStatus {
@@ -84,8 +98,12 @@ impl Future for ActivityFuture {
 }
 
 impl Start {
-    pub fn new(wf: &WorkflowNode) -> Self {
-        Start { id: wf.id.clone() }
+    pub fn new(wf: &WorkflowNode, job_channel: Sender<workflow::Message>, position: usize) -> Self {
+        Start {
+            id: wf.id.clone(),
+            job_channel,
+            position,
+        }
     }
 }
 
@@ -97,14 +115,18 @@ impl Node for Start {
     fn id(&self) -> &str {
         &self.id
     }
-    async fn run(&self) -> Result<(), NodeError> {
+    async fn execute(&self) -> Result<(), NodeError> {
         Ok(())
     }
 }
 
 impl End {
-    pub fn new(wf: &WorkflowNode) -> Self {
-        End { id: wf.id.clone() }
+    pub fn new(wf: &WorkflowNode, job_channel: Sender<workflow::Message>, position: usize) -> Self {
+        End {
+            id: wf.id.clone(),
+            job_channel,
+            position,
+        }
     }
 }
 
@@ -116,13 +138,18 @@ impl Node for End {
     fn id(&self) -> &str {
         &self.id
     }
-    async fn run(&self) -> Result<(), NodeError> {
-        Ok(())
+    async fn execute(&self) -> Result<Vec<workflow::Parameter>, NodeError> {
+        Ok(vec![])
     }
 }
 
 impl Activity {
-    pub fn new(wf: &WorkflowNode, waker_channel: &Sender<Event>) -> Self {
+    pub fn new(
+        wf: &WorkflowNode,
+        waker_channel: &Sender<Event>,
+        job_channel: Sender<workflow::Message>,
+        position: usize,
+    ) -> Self {
         let mut activity_id: Option<String> = None;
         let mut description: Option<String> = None;
         let mut fail_on_error: Option<bool> = None;
@@ -140,6 +167,8 @@ impl Activity {
             description: description.unwrap(),
             fail_on_error: fail_on_error.unwrap(),
             waker_tx: waker_channel.clone(),
+            job_channel,
+            position,
         }
     }
 }
@@ -152,9 +181,19 @@ impl Node for Activity {
     fn id(&self) -> &str {
         &self.id
     }
-    async fn run(&self) -> Result<(), NodeError> {
+
+    fn position(&self) -> usize {
+        self.position
+    }
+
+    async fn execute(&self) -> Result<Vec<workflow::Parameter>, NodeError> {
         let future = ActivityFuture::new(self);
         future.await;
+        Ok(())
+    }
+
+    async fn run(&self) -> Result<(), NodeError> {
+        self.job_channel.send(workflow::Message { No }).await;
         Ok(())
     }
 }

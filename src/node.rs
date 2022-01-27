@@ -1,3 +1,4 @@
+use crate::workflow;
 use async_trait::async_trait;
 use dyn_clone::{clone_trait_object, DynClone};
 use std::fmt::Debug;
@@ -19,6 +20,22 @@ pub enum NodeError {
 pub trait Node: DynClone + Debug + Send + Sync {
     fn kind(&self) -> WorkflowNodeType;
     fn id(&self) -> &str;
+    fn position(&self) -> usize; // do we need position if we have the id?
+    async fn execute(&self) -> Result<Vec<workflow::Parameter>, NodeError>;
+    async fn create_msg(&self) -> workflow::Message {
+        match self.execute().await {
+            Ok(context) => workflow::Message {
+                pointer: self.position(),
+                status: workflow::NodeStatus::Success,
+                context,
+            },
+            Err(e) => workflow::Message {
+                pointer: self.position(),
+                status: workflow::NodeStatus::Failed,
+                context: vec![],
+            },
+        }
+    }
     async fn run(&self) -> Result<(), NodeError>;
 }
 
