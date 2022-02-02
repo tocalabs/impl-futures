@@ -1,6 +1,5 @@
 use crate::workflow;
 use async_trait::async_trait;
-use dyn_clone::{clone_trait_object, DynClone};
 use std::fmt::Debug;
 use thiserror::Error;
 
@@ -10,18 +9,20 @@ pub(crate) mod types;
 
 #[derive(Error, Debug)]
 pub enum NodeError {
-    #[error("Failed")]
-    Failed,
+    #[error("Failed - {0}")]
+    Failed(String),
     #[error("Communications")]
     Communication,
 }
 
 #[async_trait]
-pub trait Node: DynClone + Debug + Send + Sync {
+pub trait Node: Debug + Send + Sync {
     fn kind(&self) -> WorkflowNodeType;
-    fn id(&self) -> &str;
+    fn id(&self) -> &str; // do we need id if we have the position?
     fn position(&self) -> usize; // do we need position if we have the id?
-    async fn execute(&self) -> Result<Vec<workflow::Parameter>, NodeError>;
+    async fn execute(&self) -> Result<Vec<workflow::Parameter>, NodeError> {
+        Ok(vec![])
+    }
     async fn create_msg(&self) -> workflow::Message {
         match self.execute().await {
             Ok(context) => workflow::Message {
@@ -39,7 +40,7 @@ pub trait Node: DynClone + Debug + Send + Sync {
     async fn run(&self) -> Result<(), NodeError>;
 }
 
-clone_trait_object!(Node);
+//clone_trait_object!(Node); // Don't need to clone this as we can use an Arc to clone the Box
 
 // Rules of Workflow
 // 1. Must be able to cancel Workflow with immediate effect

@@ -1,7 +1,5 @@
 use futures::StreamExt;
 use std::io;
-use std::str::from_utf8;
-use tokio_nats;
 
 /// Bot to run activities
 ///

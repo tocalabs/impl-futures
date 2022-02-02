@@ -7,13 +7,14 @@
 //!
 //! The Job struct implements the Iterator trait and this contains the logic for moving from node
 //! to node during execution.
-use eval::Expr;
-use serde::Deserialize;
-use serde_json::Value;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::iter::Iterator;
+use std::sync::Arc;
+
+use eval::Expr;
+use serde::Deserialize;
+use serde_json::Value;
 use tokio::sync::mpsc::{Receiver, Sender};
 use uuid::Uuid;
 
@@ -24,6 +25,7 @@ use crate::reactor::Event;
 ///
 /// This includes the ID of the node it is pointing to and an expression (if there is one)
 /// that must be evaluated for the pointer to be followed.
+///
 #[derive(Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Pointer {
@@ -152,57 +154,98 @@ pub struct Job {
     cursor_map: HashMap<String, Vec<Pointer>>,
     /// A list of all the nodes within the job, each node shown in a workflow will appear
     /// exactly once
-    pub nodes: Vec<Box<dyn Node>>,
+    /// These nodes are wrapped in `Arc` so they can be sent across thread boundaries safely
+    pub nodes: Vec<Arc<Box<dyn Node>>>,
     /// The status represents the jobs running state
     status: JobStatus,
 }
 
 impl Job {
     /// Creates a new Job struct from a Workflow. Also requires the sender to the reactor for any
-    /// activity nodes that this will create as part of the Job struct.
+    /// activity nodes that this will create as part of the Job struct. Will also own the Receiver
+    /// to the executor channel so nodes can send data to it.
     /// Need to add position as property to each node
     /// Flatten pointer map to quickly scan for a nodes dependencies
-    pub fn new(wf: &Workflow, tx: &Sender<Event>) -> Self {
-        let mut nodes: Vec<Box<dyn Node>> = Vec::with_capacity(wf.workflow.len());
+    pub fn new(wf: &Workflow, reactor_tx: &Sender<Event>) -> (Self, Receiver<Message>) {
+        let (exec_tx, exec_rx) = tokio::sync::mpsc::channel(20);
+        let mut nodes: Vec<Arc<Box<dyn Node>>> = Vec::with_capacity(wf.workflow.len());
         let mut cursor_map: HashMap<String, Vec<Pointer>> = HashMap::new();
-        for node in wf.workflow.iter() {
+        for (i, node) in wf.workflow.iter().enumerate() {
             match node.kind {
                 WorkflowNodeType::Start => {
-                    nodes.push(Box::new(Start::new(node)));
+                    nodes.push(Arc::new(Box::new(Start::new(node, exec_tx.clone(), i))));
                 }
-                WorkflowNodeType::Parallel => {}
-                WorkflowNodeType::Exclusive => {}
+                WorkflowNodeType::Parallel => {
+                    let dependencies = node.pointers.len();
+                    let wrapped_deps = if dependencies == 0 {
+                        None
+                    } else {
+                        Some(dependencies)
+                    };
+                    nodes.push(Arc::new(Box::new(Parallel::new(
+                        node,
+                        exec_tx.clone(),
+                        i,
+                        wrapped_deps,
+                    ))));
+                }
+                WorkflowNodeType::Exclusive => {
+                    todo!()
+                }
                 WorkflowNodeType::Activity => {
-                    nodes.push(Box::new(Activity::new(node, tx)));
+                    nodes.push(Arc::new(Box::new(Activity::new(
+                        node,
+                        reactor_tx,
+                        exec_tx.clone(),
+                        i,
+                    ))));
                 }
-                WorkflowNodeType::Trigger => {}
+                WorkflowNodeType::Trigger => {
+                    todo!()
+                }
                 WorkflowNodeType::End => {
-                    nodes.push(Box::new(End::new(node)));
+                    nodes.push(Arc::new(Box::new(End::new(node, exec_tx.clone(), i))));
                 }
             }
             cursor_map.insert(node.id.clone(), node.pointers.clone());
         }
-        Job {
-            id: Uuid::new_v4().to_string(),
-            owner_id: wf.associated_user_id.clone(),
-            context: vec![],
-            current: None,
-            cursor_map,
-            nodes,
-            status: JobStatus::NotStarted,
-        }
+        (
+            Job {
+                id: Uuid::new_v4().to_string(),
+                owner_id: wf.associated_user_id.clone(),
+                context: vec![],
+                current: None,
+                cursor_map,
+                nodes,
+                status: JobStatus::NotStarted,
+            },
+            exec_rx,
+        )
     }
-
     /// Problem with returning references is that we cannot pass the reference
     /// across a thread boundary safely so will have to introduce something like an `Arc`
     /// to satisfy the borrow checker
-    fn next_node(&self, pointer: Option<usize>) -> Option<Vec<&dyn Node>> {
+    pub fn next_node(&self, pointer: Option<usize>) -> Option<Vec<Arc<Box<dyn Node>>>> {
         if let Some(ptr) = pointer {
             let current = &**self.nodes.get(ptr)?;
             let points_to = self.cursor_map.get(current.id())?;
-            let mut next_nodes: Vec<&dyn Node> = vec![];
+            let mut next_nodes: Vec<Arc<Box<dyn Node>>> = vec![];
             for path in points_to {
-                next_nodes.push(&**self.nodes.iter().find(|x| path.points_to == x.id())?)
+                if let Some(expression) = &path.expression {
+                    if !Expr::new(expression)
+                        .exec()
+                        .expect("Unable to evaluate expression")
+                        .is_boolean()
+                    {
+                        continue;
+                    }
+                }
+                next_nodes.push(
+                    self.nodes
+                        .iter()
+                        .find(|x| path.points_to == x.id())?
+                        .clone(),
+                )
             }
             if next_nodes.is_empty() && current.kind() == WorkflowNodeType::End {
                 None
@@ -211,112 +254,15 @@ impl Job {
             }
         } else {
             Some(vec![
-                &**self
-                    .nodes
+                self.nodes
                     .iter()
-                    .find(|x| x.kind() == WorkflowNodeType::Start)?;
+                    .find(|x| x.kind() == WorkflowNodeType::Start)?
+                    .clone();
                 1
             ])
         }
     }
 }
-
-pub enum NextNodes {
-    Single(Box<dyn Node>),
-    Multiple(Vec<Job>),
-}
-
-impl Iterator for Job {
-    type Item = NextNodes;
-    /// Progress to the next node in the job.
-    ///
-    /// The iterator will return either a single node which is next to be executed or it will
-    /// return a `Vec<Job>` which indicates that there are many to execute
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.current {
-            // None indicates workflow hasn't started yet so we move onto Start node first
-            None => {
-                let start = self
-                    .nodes
-                    .iter()
-                    .position(|x| x.kind() == WorkflowNodeType::Start);
-                self.current = start;
-                Some(NextNodes::Single(self.nodes.get(start?)?.clone()))
-            }
-            // Some indicates we have started the job and have processed at least 1 node.
-            Some(node_index) => {
-                let current_node = self.nodes.get(node_index)?;
-                let node_id = current_node.id();
-                let pointers = self.cursor_map.get(node_id).unwrap();
-                // Nothing to iterate over if current is WorkflowNodeType::End so next will remain
-                // as None
-                match pointers.len().cmp(&1) {
-                    Ordering::Less => {
-                        // We are on the End node as there are no more pointers
-                        None
-                    }
-                    Ordering::Equal => {
-                        // Only points to one item so we can safely assume the next node is the
-                        // only one being pointed to
-                        self.current = self
-                            .nodes
-                            .iter()
-                            .position(|node| node.id() == pointers[0].points_to);
-                        return Some(NextNodes::Single(self.nodes.get(self.current?)?.clone()));
-                    }
-                    Ordering::Greater => {
-                        // Points to more than one node so we must evaluate the expressions to check
-                        // which nodes we should actually traverse to
-                        let mut valid_pointers: Vec<&str> = vec![];
-                        for pointer in pointers.iter() {
-                            match &pointer.expression {
-                                None => {
-                                    // No expression to evaluate, follow pointer as normal
-                                }
-                                Some(expr) => {
-                                    if Expr::new(expr)
-                                        .exec()
-                                        .expect("Unable to evaluate expression")
-                                        .is_boolean()
-                                    {
-                                        valid_pointers.push(&pointer.points_to);
-                                    }
-                                }
-                            }
-                        }
-                        match valid_pointers.len().cmp(&1) {
-                            // If only 1 valid pointer then clearly a single move
-                            Ordering::Equal => {
-                                self.current = self
-                                    .nodes
-                                    .iter()
-                                    .position(|node| node.id() == valid_pointers[0]);
-                                return Some(NextNodes::Single(
-                                    self.nodes.get(self.current?)?.clone(),
-                                ));
-                            }
-                            Ordering::Less => {
-                                // Return error rather than panic
-                                panic!("No expression met - stopping Job");
-                            }
-                            Ordering::Greater => {
-                                // Work out what to return based on what the current node is
-                                // Parallel - return n Jobs which only go up to their closing
-                                //            parallel and set `self.current` as closing parallel
-                                // Exclusive - return n Jobs which contains all nodes then we do a
-                                //             `select!` to finish when the first child reaches
-                                //             the end
-                                todo!();
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// async Next function
 
 pub enum NodeStatus {
     Success,
@@ -331,42 +277,4 @@ pub struct Message {
     pub status: NodeStatus,
     /// List of context sent back
     pub context: Vec<Parameter>,
-}
-
-///```
-/// let tx, rx = mpsc
-/// let job = Job::new(tx) //pass in tx for event based notification for when to progress
-/// //Each node is responsible for notifying the job that it can move forward
-/// //The next node function will need to take a pointer to the current node that has finished
-/// // So it knows where to resume the job from
-/// let next_node = job.next(None); // gets start node at very beginning
-/// next_node.run().await(); // Waiting for start node to complete
-/// while let Some(msg) = rx.recv().await {
-///     match msg.status {
-///         NodeStatus::Failed => { return Err(()) }
-///         NodeStatus::Success => {
-///             match job.next_nodes(msg) {
-///                 Some(nodes) => {}
-///             }
-///             let next_nodes = job.next_nodes(msg); //next_nodes could return multiple jobs
-///             if nodes.len() == 1 {
-///                 node.run().await
-///             }
-///             for node in next_nodes {
-///                 task::spawn(node.run())
-///             }
-///         }
-///     }
-///     
-///     
-/// }
-///```
-///
-
-async fn next_node(job: &Job) -> Result<Box<dyn Node>, ()> {
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<Message>(20);
-    while let Some(msg) = rx.recv().await {
-        let node_sender = tx.clone();
-    }
-    Err(())
 }

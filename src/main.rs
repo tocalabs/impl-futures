@@ -18,7 +18,7 @@
 //!
 //! The Executor is responsible for running each job and also the ability to cancel each job
 //!
-//! ```rs
+//! ```
 //! while let Some(msg) = nats.subscriber("job.*").next().await {
 //!     match msg.topic {
 //!         "job.execute" => {...}

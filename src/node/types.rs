@@ -1,6 +1,6 @@
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll};
 
 use async_trait::async_trait;
@@ -8,7 +8,7 @@ use tokio::sync::mpsc::Sender;
 
 use crate::reactor::Event;
 use crate::workflow;
-use crate::workflow::{WorkflowNode, WorkflowNodeType};
+use crate::workflow::{Parameter, WorkflowNode, WorkflowNodeType};
 
 use super::{Node, NodeError};
 
@@ -38,12 +38,45 @@ pub struct Activity {
 }
 
 #[derive(Debug)]
-pub struct Parallel {
-    id: String,
-    dependencies: AtomicUsize, // AtomicUsize does not implement Clone so we may have to think carefully about references here
-    dependencies_met: AtomicUsize,
-    exec_tx: Sender<workflow::Message>,
-    position: usize,
+pub enum Parallel {
+    Opening {
+        id: String,
+        job_channel: Sender<workflow::Message>,
+        position: usize,
+    },
+    Closing {
+        id: String,
+        job_channel: Sender<workflow::Message>,
+        position: usize,
+        /// AtomicUsize does not implement Clone so we cannot trivially clone Parallel without
+        /// using an `Rc` or `Arc`
+        dependencies: AtomicUsize,
+        dependencies_met: AtomicUsize,
+    },
+}
+
+impl Parallel {
+    pub(crate) fn new(
+        wf: &WorkflowNode,
+        job_channel: Sender<workflow::Message>,
+        position: usize,
+        dependencies: Option<usize>,
+    ) -> Self {
+        match dependencies {
+            None => Parallel::Opening {
+                id: wf.id.to_string(),
+                job_channel,
+                position,
+            },
+            Some(dependencies) => Parallel::Closing {
+                id: wf.id.to_string(),
+                job_channel,
+                position,
+                dependencies: AtomicUsize::new(dependencies),
+                dependencies_met: AtomicUsize::new(0),
+            },
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -61,6 +94,7 @@ enum FutureStatus {
 struct ActivityFuture {
     activity: Activity,
     state: FutureStatus,
+    outputs: Vec<Parameter>,
 }
 
 impl ActivityFuture {
@@ -68,12 +102,13 @@ impl ActivityFuture {
         ActivityFuture {
             activity: activity.clone(),
             state: FutureStatus::Start,
+            outputs: vec![],
         }
     }
 }
 
 impl Future for ActivityFuture {
-    type Output = ();
+    type Output = Vec<Parameter>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let me = self.get_mut();
@@ -92,7 +127,7 @@ impl Future for ActivityFuture {
                 me.state = FutureStatus::RequestSent;
                 Poll::Pending
             }
-            FutureStatus::RequestSent => Poll::Ready(()),
+            FutureStatus::RequestSent => Poll::Ready(self.outputs.clone()),
         }
     }
 }
@@ -115,7 +150,13 @@ impl Node for Start {
     fn id(&self) -> &str {
         &self.id
     }
-    async fn execute(&self) -> Result<(), NodeError> {
+
+    fn position(&self) -> usize {
+        self.position
+    }
+
+    async fn run(&self) -> Result<(), NodeError> {
+        self.job_channel.send(self.create_msg().await).await;
         Ok(())
     }
 }
@@ -138,8 +179,53 @@ impl Node for End {
     fn id(&self) -> &str {
         &self.id
     }
-    async fn execute(&self) -> Result<Vec<workflow::Parameter>, NodeError> {
-        Ok(vec![])
+    fn position(&self) -> usize {
+        self.position
+    }
+    async fn run(&self) -> Result<(), NodeError> {
+        self.job_channel.send(self.create_msg().await).await;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Node for Parallel {
+    fn kind(&self) -> WorkflowNodeType {
+        WorkflowNodeType::Start
+    }
+    fn id(&self) -> &str {
+        match &self {
+            Parallel::Opening { id, .. } => id,
+            Parallel::Closing { id, .. } => id,
+        }
+    }
+
+    fn position(&self) -> usize {
+        match &self {
+            Parallel::Opening { position, .. } => *position,
+            Parallel::Closing { position, .. } => *position,
+        }
+    }
+
+    async fn run(&self) -> Result<(), NodeError> {
+        match &self {
+            Parallel::Opening { job_channel, .. } => {
+                job_channel.send(self.create_msg().await).await;
+            }
+            Parallel::Closing {
+                mut dependencies,
+                mut dependencies_met,
+                job_channel,
+                ..
+            } => {
+                let _ = dependencies_met.fetch_add(1, Ordering::Acquire);
+                let new = dependencies_met.load(Ordering::Relaxed);
+                if new == dependencies.load(Ordering::Acquire) {
+                    job_channel.send(self.create_msg().await).await;
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -188,12 +274,12 @@ impl Node for Activity {
 
     async fn execute(&self) -> Result<Vec<workflow::Parameter>, NodeError> {
         let future = ActivityFuture::new(self);
-        future.await;
-        Ok(())
+        let outputs = future.await;
+        Ok(outputs)
     }
 
     async fn run(&self) -> Result<(), NodeError> {
-        self.job_channel.send(workflow::Message { No }).await;
+        self.job_channel.send(self.create_msg().await).await;
         Ok(())
     }
 }
