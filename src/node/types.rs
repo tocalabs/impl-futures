@@ -127,7 +127,7 @@ impl Future for ActivityFuture {
                 me.state = FutureStatus::RequestSent;
                 Poll::Pending
             }
-            FutureStatus::RequestSent => Poll::Ready(self.outputs.clone()),
+            FutureStatus::RequestSent => Poll::Ready(me.outputs.clone()),
         }
     }
 }
@@ -213,8 +213,8 @@ impl Node for Parallel {
                 job_channel.send(self.create_msg().await).await;
             }
             Parallel::Closing {
-                mut dependencies,
-                mut dependencies_met,
+                dependencies,
+                dependencies_met,
                 job_channel,
                 ..
             } => {

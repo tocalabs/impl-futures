@@ -16,11 +16,11 @@ pub async fn execute_handler(file: &str, rc_clone: Sender<Event>) -> Result<(), 
     let wf: workflow::Workflow = serde_json::from_str(&wf_json)?;
     let (job, job_rx) = Job::new(&wf, &rc_clone);
     //run_job(job).await?;
-    run(job, job_rx).await?;
+    run(job, job_rx).await;
     Ok(())
 }
 
-async fn run(job: Job, mut rx: Receiver<Message>) -> Result<(), io::Error> {
+async fn run(job: Job, mut rx: Receiver<Message>) {
     //Each node is responsible for notifying the job that it can move forward
     //The next node function will need to take a pointer to the current node that has finished
     // So it knows where to resume the job from
@@ -30,16 +30,14 @@ async fn run(job: Job, mut rx: Receiver<Message>) -> Result<(), io::Error> {
     }
     while let Some(msg) = rx.recv().await {
         match msg.status {
-            NodeStatus::Failed => return Err(()),
+            NodeStatus::Failed => {}
             NodeStatus::Success => match job.next_node(Some(msg.pointer)) {
                 Some(nodes) => {
                     for node in nodes {
-                        task::spawn(node.clone().run());
+                        task::spawn(async move { node.clone().run().await });
                     }
                 }
-                None => {
-                    //Reached the end node
-                }
+                None => {}
             },
         }
     }
