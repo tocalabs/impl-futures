@@ -190,7 +190,7 @@ impl Job {
                     ))));
                 }
                 WorkflowNodeType::Exclusive => {
-                    todo!()
+                    nodes.push(Arc::new(Box::new(Exclusive::new(node, exec_tx.clone(), i))));
                 }
                 WorkflowNodeType::Activity => {
                     nodes.push(Arc::new(Box::new(Activity::new(
@@ -222,9 +222,21 @@ impl Job {
             exec_rx,
         )
     }
-    /// Problem with returning references is that we cannot pass the reference
-    /// across a thread boundary safely so will have to introduce something like an `Arc`
-    /// to satisfy the borrow checker
+
+    /// This will return the next nodes being pointed to by the one that has just completed
+    ///
+    /// This takes an optional pointer to the node which has just completed and then based off
+    /// that will return the nodes which are pointed to from the one that has just completed.
+    ///
+    /// If we are at the start of the job then we can pass in `None` to signify this and it will
+    /// return the Start node.
+    ///
+    /// This will return more than one node in the cases where multiple nodes are pointed to from the
+    /// node that just completed. This covers cases such as opening parallel nodes and exclusives which
+    /// can point to multiple nodes.
+    ///
+    /// This will return None when it has reached an End node to signify there are no more nodes to
+    /// be run.
     pub fn next_node(&self, pointer: Option<usize>) -> Option<Vec<Arc<Box<dyn Node>>>> {
         if let Some(ptr) = pointer {
             let current = &**self.nodes.get(ptr)?;
@@ -264,6 +276,7 @@ impl Job {
     }
 }
 
+/// Indicates whether a node has succeeded or failed
 pub enum NodeStatus {
     Success,
     Failed,

@@ -1,4 +1,6 @@
 use futures::StreamExt;
+use rand;
+use rand::Rng;
 use std::io;
 
 /// Bot to run activities
@@ -13,7 +15,9 @@ async fn main() -> Result<(), io::Error> {
     while let Some(msg) = activity_subscription.next().await {
         let client_clone = nats_client.clone();
         tokio::task::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            let delay_duration = rand::thread_rng().gen_range(1..=10);
+            tokio::time::sleep(std::time::Duration::from_secs(delay_duration)).await;
+            println!("Bot Ran Activity");
             let _ = client_clone
                 .clone()
                 .publish(tokio_nats::Msg::builder("activity.response").bytes(msg.payload))

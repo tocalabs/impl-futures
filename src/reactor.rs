@@ -1,3 +1,23 @@
+//! Register interest in events and wake futures when the event occurs
+//!
+//!
+//! ## Reactor
+//! The Reactor stores a register of all the events that are currently being listened for.
+//!
+//! This has been designed so that it is completed decoupled from the main Execution Engine logic
+//! meaning that you could extract the Reactor to a separate process entirely.
+//! By separating this to another process you could update/patch the main EE component and the
+//! reactor would store any events that came in and then we could resume jobs despite the core EE
+//! component being swapped out. Of course this will require the interface between the EE and Reactor
+//! remained consistent.
+//!
+//!
+//! ## Events
+//! An event is defined as an external message coming in notifying the EE that something has occurred.
+//! This could be something like:
+//! - The Bot is locked and unable to make progress
+//! - An activity response has come in
+
 use futures::StreamExt;
 use serde_json::from_str;
 use std::collections::HashMap;
@@ -7,8 +27,10 @@ use std::task::Waker;
 
 use tokio::sync::mpsc::Receiver;
 
+/// A sum type/algebraic data type containing all the different types of Event that could occur
 #[derive(Debug, Clone)]
 pub enum Event {
+    /// Defines the fields needed to execute an activity
     Activity {
         node_id: String,
         activity_id: String,
@@ -16,17 +38,30 @@ pub enum Event {
     },
 }
 
+/// The Reactor struct stores event references for the events currently being waited on
+///
+/// This collection is safe to access across thread boundaries as we have wrapped with an [`Arc`](std::sync::Arc)
+/// to satisfy borrowing the value across threads and it is also wrapped in a [`Mutex`](std::sync::Mutex)
+/// to ensure that only one thread can write to it at a time
+///
+/// ---
+/// Safety: We must make sure when a job is prematurely cancelled we drop any events being waited on
+/// We could do this by implementing the drop trait on the [`Job`](crate::workflow::Job)
 pub struct Reactor {
+    /// A dictionary of events where the key is a unique identifier to the event
+    /// and the value contains a `struct` with a mechanism to resume the `future`
     pub events: Arc<Mutex<HashMap<String, Waker>>>,
 }
 
 impl Reactor {
+    /// Create a new reactor with an empty events register
     pub fn new() -> Self {
         Reactor {
-            events: Arc::new(Mutex::new(HashMap::new())),
+            events: Default::default(),
         }
     }
 
+    /// Connect to the external message broker to listen for events and react to them
     pub async fn run(self, mut internal_rx: Receiver<Event>) -> Result<(), std::io::Error> {
         let nats_client = tokio_nats::Nats::connect("127.0.0.1:4222").await?;
         let mut response_sub = nats_client.subscribe("activity.response").await?;
@@ -78,5 +113,3 @@ async fn register_event(
     }
     Ok(())
 }
-
-async fn receive_event() {}

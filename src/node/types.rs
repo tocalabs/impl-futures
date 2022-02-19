@@ -1,3 +1,17 @@
+//! Types are the concrete structs and enums that a Node is cast to
+//!
+//! Each type contains the relevant fields required for storing state during execution.
+//! Every type _must_ implement the [`Node`](super::Node) trait.
+//!
+//! As a minimum a Node type must include the following fields:
+//! ```
+//! struct NewNode {
+//!     id: String  // The unique identifier for the node
+//!     job_channel: Sender<workflow::Message> // The channel to notify the job of completion
+//!     position: usize // A pointer to the node's position in the Job.nodes collection
+//! }
+//! ```
+
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -12,6 +26,7 @@ use crate::workflow::{Parameter, WorkflowNode, WorkflowNodeType};
 
 use super::{Node, NodeError};
 
+/// Start Node concrete type
 #[derive(Clone, Debug)]
 pub struct Start {
     id: String,
@@ -19,6 +34,7 @@ pub struct Start {
     position: usize,
 }
 
+/// End Node concrete type
 #[derive(Clone, Debug)]
 pub struct End {
     id: String,
@@ -26,6 +42,7 @@ pub struct End {
     position: usize,
 }
 
+/// Activity Node concrete type
 #[derive(Clone, Debug)]
 pub struct Activity {
     id: String,
@@ -37,21 +54,31 @@ pub struct Activity {
     position: usize,
 }
 
+/// Parallel node concrete type
+///
+/// Contains two variants, `Opening` and `Closing`, this is because each one behaves in a different
+/// way when run. The `Closing` variant of a parallel must hold execution until all pointers into it
+/// have been resolved whereas an `Opening` variant does nothing.
 #[derive(Debug)]
 pub enum Parallel {
+    /// No special behaviour required for Opening, simply completes with no bespoke behaviour
     Opening {
         id: String,
         job_channel: Sender<workflow::Message>,
         position: usize,
     },
+    /// Keeps track of how many times it is pointed to and how many times it has been run. We can
+    /// only proceed once it has been run as many times as it has pointers to it. The
+    /// `dependencies_met` count is reset every time the node completes, this is in case we loop
+    /// back to this node
     Closing {
         id: String,
         job_channel: Sender<workflow::Message>,
         position: usize,
-        /// AtomicUsize does not implement Clone so we cannot trivially clone Parallel without
-        /// using an `Rc` or `Arc`
+        /// How many times it is pointed to
         dependencies: AtomicUsize,
-        dependencies_met: AtomicUsize,
+        /// How many times it has been run
+        dependencies_met: AtomicUsize, //todo: this must be set once dependencies == dependencies_met
     },
 }
 
@@ -79,6 +106,10 @@ impl Parallel {
     }
 }
 
+/// Exclusive node concrete type
+///
+/// The exclusive node itself doesn't do any bespoke execution logic as it's the [`Job.next_node`](crate::workflow::Job.next_node) method
+/// which handles any expressions present on pointers.
 #[derive(Clone, Debug)]
 pub struct Exclusive {
     id: String,
@@ -86,11 +117,13 @@ pub struct Exclusive {
     position: usize,
 }
 
+/// Used to store the state of the ActivityFuture
 enum FutureStatus {
     Start,
     RequestSent,
 }
 
+/// Type which implements Future for an Activity
 struct ActivityFuture {
     activity: Activity,
     state: FutureStatus,
@@ -107,6 +140,10 @@ impl ActivityFuture {
     }
 }
 
+/// We have hand coded a future here but this could easily be awaiting a channel instead
+/// This has simply been done as a learning exercise more than anything else.
+///
+/// todo: We should compare the performance of this vs awaiting a channel
 impl Future for ActivityFuture {
     type Output = Vec<Parameter>;
 
@@ -183,7 +220,7 @@ impl Node for End {
         self.position
     }
     async fn run(&self) -> Result<(), NodeError> {
-        self.job_channel.send(self.create_msg().await).await;
+        let _ = self.job_channel.send(self.create_msg().await).await;
         Ok(())
     }
 }
@@ -210,7 +247,7 @@ impl Node for Parallel {
     async fn run(&self) -> Result<(), NodeError> {
         match &self {
             Parallel::Opening { job_channel, .. } => {
-                job_channel.send(self.create_msg().await).await;
+                let _ = job_channel.send(self.create_msg().await).await;
             }
             Parallel::Closing {
                 dependencies,
@@ -221,7 +258,7 @@ impl Node for Parallel {
                 let _ = dependencies_met.fetch_add(1, Ordering::Acquire);
                 let new = dependencies_met.load(Ordering::Relaxed);
                 if new == dependencies.load(Ordering::Acquire) {
-                    job_channel.send(self.create_msg().await).await;
+                    let _ = job_channel.send(self.create_msg().await).await;
                 }
             }
         }
@@ -279,7 +316,36 @@ impl Node for Activity {
     }
 
     async fn run(&self) -> Result<(), NodeError> {
-        self.job_channel.send(self.create_msg().await).await;
+        let _ = self.job_channel.send(self.create_msg().await).await;
+        Ok(())
+    }
+}
+
+impl Exclusive {
+    pub fn new(wf: &WorkflowNode, job_channel: Sender<workflow::Message>, position: usize) -> Self {
+        Exclusive {
+            id: wf.id.clone(),
+            job_channel,
+            position,
+        }
+    }
+}
+#[async_trait]
+impl Node for Exclusive {
+    fn kind(&self) -> WorkflowNodeType {
+        WorkflowNodeType::Exclusive
+    }
+
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn position(&self) -> usize {
+        self.position
+    }
+
+    async fn run(&self) -> Result<(), NodeError> {
+        let _ = self.job_channel.send(self.create_msg().await).await;
         Ok(())
     }
 }
