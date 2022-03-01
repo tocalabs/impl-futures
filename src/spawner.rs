@@ -7,11 +7,13 @@
 use std::collections::HashMap;
 use std::io;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tokio::select;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task;
+use tokio::time::Instant;
 
 use crate::executor;
 use crate::reactor::Event;
@@ -23,6 +25,8 @@ pub enum SpawnerMsg {
     /// Cancel contains the job ID which needs to be cancelled
     Cancel(String),
 }
+
+static JOB_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// Create channel required for communication with the Spawner
 pub fn spawner_channel() -> (Sender<SpawnerMsg>, Receiver<SpawnerMsg>) {
@@ -47,7 +51,7 @@ pub struct Spawner {
     rx: Receiver<SpawnerMsg>,
     /// A thread safe register of job ids and their cancellation channel, to be used when the Spawner
     /// receives a `SpawnerMsg::Cancel` message
-    jobs: Arc<Mutex<HashMap<String, oneshot::Sender<()>>>>,
+    jobs: Arc<Mutex<HashMap<String, tokio::sync::broadcast::Sender<()>>>>,
 }
 
 impl Spawner {
@@ -74,25 +78,31 @@ impl Spawner {
         while let Some(msg) = self.rx.recv().await {
             match msg {
                 SpawnerMsg::Execute(file) => {
-                    let cloned_jobs = self.jobs.clone();
+                    JOB_COUNTER.fetch_add(1, Ordering::Acquire);
                     let rc_clone = self.reactor_channel.clone();
-                    let (cancellation_tx, cancellation_rx) = tokio::sync::oneshot::channel::<()>();
+                    let cloned_jobs = self.jobs.clone();
+                    let (cancellation_tx, mut cancellation_rx) = tokio::sync::broadcast::channel::<()>(100);
+
                     {
                         let mut write_jobs = cloned_jobs.lock().expect("Locking failed");
-                        write_jobs.insert(file.clone(), cancellation_tx);
+                        write_jobs.insert(file.clone(), cancellation_tx.clone());
                     }
-                    //executor::execute_handler(&file, rc_clone).await;
                     task::spawn(async move {
                         select!(
-                            _ = executor::execute_handler(&file, rc_clone) => {
-                                println!("The job has completed!")
+                            _ = executor::execute_handler("parallel.json", rc_clone, cancellation_tx) => {
+                                cloned_jobs.lock().unwrap().remove(&file);
                             }
-                            _ = cancellation_rx => {
-                                println!("The job was cancelled");
+                            temp = cancellation_rx.recv() => {
+                                match temp {
+                                    Ok(_) => println!("The job was cancelled"),
+                                    Err(_) => println!("The sender was dropped")
+                                }
                             }
                         );
+                        JOB_COUNTER.fetch_sub(1, Ordering::Acquire);
                     });
                 }
+
                 SpawnerMsg::Cancel(job_id) => {
                     let cloned_jobs = self.jobs.clone();
                     let mut n = cloned_jobs.lock().expect("Failed to lock");

@@ -247,6 +247,7 @@ impl Node for Parallel {
     async fn run(&self) -> Result<(), NodeError> {
         match &self {
             Parallel::Opening { job_channel, .. } => {
+                println!("Inside Opening");
                 let _ = job_channel.send(self.create_msg().await).await;
             }
             Parallel::Closing {
@@ -255,6 +256,9 @@ impl Node for Parallel {
                 job_channel,
                 ..
             } => {
+                println!("Inside closing");
+                println!("Dependencies: {:#?}", dependencies);
+                println!("Dependencies met: {:#?}", dependencies_met);
                 let _ = dependencies_met.fetch_add(1, Ordering::Acquire);
                 let new = dependencies_met.load(Ordering::Relaxed);
                 if new == dependencies.load(Ordering::Acquire) {

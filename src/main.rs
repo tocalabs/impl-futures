@@ -30,6 +30,7 @@
 //!     }
 //! }
 //! ```
+use rand::Rng;
 pub(crate) use std::io;
 pub(crate) use std::time::Duration;
 pub(crate) use tokio::task;
@@ -95,11 +96,18 @@ async fn main() -> Result<(), io::Error> {
     // Connect to NATs server
     let server = tokio_nats::Nats::connect("127.0.0.1:4222").await?;
     // Set up subscribers
-    let mut execution_subscriber = server.subscribe("jobs.execute").await?;
-    let mut cancellation_subscriber = server.subscribe("jobs.cancel").await?;
+    let mut _execution_subscriber = server.subscribe("jobs.execute").await?;
+    let mut _cancellation_subscriber = server.subscribe("jobs.cancel").await?;
 
-    tokio::time::sleep(Duration::from_secs(3)).await;
-    spawn_tx.send(spawner::execute_msg("workflow.json")).await;
+    // let _ = spawn_tx.send(spawner::execute_msg(&uuid::Uuid::new_v4().to_string())).await;
+    // tokio::time::sleep(Duration::from_secs(10)).await;
+    // let _ = spawn_tx.send(spawner::execute_msg(&uuid::Uuid::new_v4().to_string())).await;
+    for _ in 0..1 {
+        //tokio::time::sleep(Duration::from_millis(1000)).await;
+        println!("Spawned");
+        spawn_tx.send(spawner::execute_msg(&uuid::Uuid::new_v4().to_string())).await;
+    }
+
     //spawn_tx.send(spawner::cancel_msg("workflow.json")).await;
     // Await the handles to reactor and spawner to make sure all tasks run to completion
     let _ = (reactor_handle.await, spawner_handle.await);

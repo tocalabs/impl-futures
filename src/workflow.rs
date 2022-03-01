@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::iter::Iterator;
 use std::sync::Arc;
+use std::time::Instant;
 
 use eval::Expr;
 use serde::Deserialize;
@@ -176,8 +177,15 @@ impl Job {
                     nodes.push(Arc::new(Box::new(Start::new(node, exec_tx.clone(), i))));
                 }
                 WorkflowNodeType::Parallel => {
-                    let dependencies = node.pointers.len();
-                    let wrapped_deps = if dependencies == 0 {
+                    let dependencies = wf
+                        .workflow
+                        .iter()
+                        .map(|n| &n.pointers)
+                        .flatten()
+                        .filter(|p| p.points_to == node.id)
+                        .count();
+                    //println!("{dependencies}");
+                    let wrapped_deps = if dependencies == 1 {
                         None
                     } else {
                         Some(dependencies)
