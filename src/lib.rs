@@ -20,16 +20,6 @@
 //! of Rust's async/await.
 //!
 //!
-//! The Executor is responsible for running each job and also the ability to cancel each job
-//!
-//! ```
-//! while let Some(msg) = nats.subscriber("job.*").next().await {
-//!     match msg.topic {
-//!         "job.execute" => {...}
-//!         "job.cancel" => {...}
-//!     }
-//! }
-//! ```
 pub(crate) use std::io;
 
 pub(crate) use tokio::task;
@@ -44,7 +34,7 @@ mod workflow;
 
 /// Sets up the runtime and starts the message broker listeners
 ///
-/// The main creates the structures used by the Runtime and starts the Reactor, Spawner and MsgBroker consumers.
+/// The `start` function creates the structures used by the Runtime and starts the Reactor, Spawner and MsgBroker consumers.
 ///
 /// 1. The [Reactor](crate::reactor) - This includes the channel to send messages to the reactor and
 /// the Reactor struct itself. The Reactor is then run in a separate task and we `await` on the task's `Handle`.
@@ -53,7 +43,6 @@ mod workflow;
 /// a background task and we `await` on the task's `Handle`.
 /// 3. The [NATs](https://docs.nats.io/) consumer - This creates a NATs consumer listening for messages
 /// on the `jobs.execute` and `jobs.cancel` topics.
-
 pub async fn start() -> Result<(), io::Error> {
     // Create reactor channel
     let (reactor_tx, reactor_rx) = tokio::sync::mpsc::channel::<Event>(20);
