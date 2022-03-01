@@ -20,5 +20,5 @@ async-trait = "0.1.51"
 dyn-clone = "1.0.4"
 futures = "0.3.16"
 rand = { version = "0.8.0", features = ["std_rng"] }
-tokio-nats = { path = "../tokio-nats"}
+nats = { version = "0.18.1"}
 eval = "0.4.3"

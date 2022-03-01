@@ -63,8 +63,8 @@ impl Reactor {
 
     /// Connect to the external message broker to listen for events and react to them
     pub async fn run(self, mut internal_rx: Receiver<Event>) -> Result<(), std::io::Error> {
-        let nats_client = tokio_nats::Nats::connect("127.0.0.1:4222").await?;
-        let mut response_sub = nats_client.subscribe("activity.response").await?;
+        let nats_client = nats::connect("127.0.0.1:4222")?;
+        let mut response_sub = nats_client.subscribe("activity.response")?;
         let event_collection = self.events.clone();
         let response_collection = self.events.clone();
         let client_clone = nats_client.clone();
@@ -75,10 +75,10 @@ impl Reactor {
         });
 
         let external_handle = tokio::task::spawn(async move {
-            while let Some(msg) = response_sub.next().await {
+            while let Some(msg) = response_sub.next() {
                 let move_msg = msg;
                 let node_id: String =
-                    from_str::<String>(from_utf8(&move_msg.payload).expect("Unable to read msg"))
+                    from_str::<String>(from_utf8(&move_msg.data).expect("Unable to read msg"))
                         .expect("Unable to deserialize to string");
                 let mut inner = response_collection.lock().expect("Locking failed");
                 if let Some(waker) = inner.remove(&node_id) {
@@ -94,7 +94,7 @@ impl Reactor {
 async fn register_event(
     event_collection: Arc<Mutex<HashMap<String, Waker>>>,
     event: Event,
-    nats_client: &tokio_nats::Nats,
+    nats_client: &nats::Connection,
 ) -> Result<(), std::io::Error> {
     match event {
         Event::Activity {
@@ -106,9 +106,7 @@ async fn register_event(
                 let mut inner = event_collection.lock().expect("Locking failed");
                 inner.insert(node_id.clone(), waker.clone());
             }
-            let _ = nats_client
-                .publish(tokio_nats::Msg::builder("activity.execute").json(&node_id)?)
-                .await?;
+            let _ = nats_client.publish("activity.execute", &node_id)?;
         }
     }
     Ok(())

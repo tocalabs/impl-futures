@@ -30,9 +30,8 @@
 //!     }
 //! }
 //! ```
-use rand::Rng;
 pub(crate) use std::io;
-pub(crate) use std::time::Duration;
+
 pub(crate) use tokio::task;
 
 use crate::reactor::{Event, Reactor};
@@ -94,10 +93,10 @@ async fn main() -> Result<(), io::Error> {
     */
 
     // Connect to NATs server
-    let server = tokio_nats::Nats::connect("127.0.0.1:4222").await?;
+    let server = nats::connect("127.0.0.1:4222")?;
     // Set up subscribers
-    let mut _execution_subscriber = server.subscribe("jobs.execute").await?;
-    let mut _cancellation_subscriber = server.subscribe("jobs.cancel").await?;
+    let mut _execution_subscriber = server.subscribe("jobs.execute")?;
+    let mut _cancellation_subscriber = server.subscribe("jobs.cancel")?;
 
     // let _ = spawn_tx.send(spawner::execute_msg(&uuid::Uuid::new_v4().to_string())).await;
     // tokio::time::sleep(Duration::from_secs(10)).await;
@@ -105,7 +104,9 @@ async fn main() -> Result<(), io::Error> {
     for _ in 0..1 {
         //tokio::time::sleep(Duration::from_millis(1000)).await;
         println!("Spawned");
-        spawn_tx.send(spawner::execute_msg(&uuid::Uuid::new_v4().to_string())).await;
+        spawn_tx
+            .send(spawner::execute_msg(&uuid::Uuid::new_v4().to_string()))
+            .await;
     }
 
     //spawn_tx.send(spawner::cancel_msg("workflow.json")).await;

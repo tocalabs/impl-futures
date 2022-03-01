@@ -4,17 +4,16 @@
 //! The bot will then run an activity for an arbitrary amount of time
 //! Return message to Core to inform it that it has completed the activity
 
-use futures::StreamExt;
-use rand;
-use rand::Rng;
 use std::io;
 
+use rand;
+use rand::Rng;
 
 #[tokio::main]
 async fn main() -> Result<(), io::Error> {
-    let nats_client = tokio_nats::Nats::connect("127.0.0.1:4222").await?;
-    let mut activity_subscription = nats_client.subscribe("activity.execute").await?;
-    while let Some(msg) = activity_subscription.next().await {
+    let nats_client = nats::connect("127.0.0.1:4222")?;
+    let activity_subscription = nats_client.subscribe("activity.execute")?;
+    while let Some(msg) = activity_subscription.next() {
         let client_clone = nats_client.clone();
         tokio::task::spawn(async move {
             let delay_duration = rand::thread_rng().gen_range(1..=10);
@@ -22,8 +21,7 @@ async fn main() -> Result<(), io::Error> {
             println!("Running Activity");
             let _ = client_clone
                 .clone()
-                .publish(tokio_nats::Msg::builder("activity.response").bytes(msg.payload))
-                .await
+                .publish("activity.response", msg.data)
                 .expect("Unable to send response");
         });
     }
