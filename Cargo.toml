@@ -1,7 +1,11 @@
 [package]
 name = "execution-engine"
+description = "Execution Engine implemented using Futures and async/await"
 version = "0.1.0"
 edition = "2018"
+authors = ["James Swash"]
+keywords = ["toca", "execution engine"]
+repository = "https://github.com/james-swash/impl-futures"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
