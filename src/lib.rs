@@ -53,8 +53,8 @@ mod workflow;
 /// a background task and we `await` on the task's `Handle`.
 /// 3. The [NATs](https://docs.nats.io/) consumer - This creates a NATs consumer listening for messages
 /// on the `jobs.execute` and `jobs.cancel` topics.
-#[tokio::main]
-async fn main() -> Result<(), io::Error> {
+
+pub async fn start() -> Result<(), io::Error> {
     // Create reactor channel
     let (reactor_tx, reactor_rx) = tokio::sync::mpsc::channel::<Event>(20);
     // Create Reactor
