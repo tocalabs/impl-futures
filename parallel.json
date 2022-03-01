@@ -1,0 +1,818 @@
+{
+  "id": "621e1fc8785169000168605b",
+  "workflowId": "a481e9fa-c09c-4b98-a1cb-d7db5efca176",
+  "associatedUserId": "e350f30b-7b03-47a7-86c6-87df876df286",
+  "name": "Parallel",
+  "description": "Parallel stuff",
+  "nodeDataArray": [
+    {
+      "category": "Start",
+      "text": "",
+      "key": 1,
+      "loc": "525 500",
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ]
+    },
+    {
+      "category": "Parallel",
+      "text": "",
+      "key": 2,
+      "loc": "975 500",
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ]
+    },
+    {
+      "category": "Parallel",
+      "text": "",
+      "key": 3,
+      "loc": "1675 475",
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ]
+    },
+    {
+      "category": "End",
+      "text": "",
+      "key": 4,
+      "loc": "2075 475",
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ]
+    },
+    {
+      "category": "Activity",
+      "text": "Test",
+      "key": 5,
+      "loc": "1300 300",
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ]
+    },
+    {
+      "category": "Activity",
+      "text": "Test",
+      "key": 6,
+      "loc": "1300 475",
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ]
+    },
+    {
+      "category": "Activity",
+      "text": "Test",
+      "key": 7,
+      "loc": "1300 650",
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ]
+    },
+    {
+      "category": "Activity",
+      "text": "Test",
+      "key": 8,
+      "loc": "1300 825",
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ]
+    },
+    {
+      "category": "Activity",
+      "text": "Test",
+      "key": 9,
+      "loc": "1850 475",
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ]
+    },
+    {
+      "category": "Activity",
+      "text": "Test",
+      "key": 10,
+      "loc": "775 500",
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ]
+    }
+  ],
+  "linkDataArray": [
+    {
+      "from": 1,
+      "to": 10,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            23.5,
+            21.0
+          ],
+          [
+            27.0,
+            21.0
+          ],
+          [
+            30.5,
+            21.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    },
+    {
+      "from": 10,
+      "to": 2,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            33.5,
+            21.0
+          ],
+          [
+            36.0,
+            21.0
+          ],
+          [
+            38.5,
+            21.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    },
+    {
+      "from": 2,
+      "to": 5,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            41.5,
+            21.0
+          ],
+          [
+            46.5,
+            21.0
+          ],
+          [
+            46.5,
+            13.0
+          ],
+          [
+            51.5,
+            13.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    },
+    {
+      "from": 2,
+      "to": 6,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            41.5,
+            21.0
+          ],
+          [
+            46.5,
+            21.0
+          ],
+          [
+            46.5,
+            20.0
+          ],
+          [
+            51.5,
+            20.0
+          ]
+        ],
+        "labelPart": 2,
+        "labelOffset": null,
+        "anchors": null
+      }
+    },
+    {
+      "from": 2,
+      "to": 7,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            41.5,
+            21.0
+          ],
+          [
+            46.5,
+            21.0
+          ],
+          [
+            46.5,
+            27.0
+          ],
+          [
+            51.5,
+            27.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    },
+    {
+      "from": 2,
+      "to": 8,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            41.5,
+            21.0
+          ],
+          [
+            46.5,
+            21.0
+          ],
+          [
+            46.5,
+            34.0
+          ],
+          [
+            51.5,
+            34.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    },
+    {
+      "from": 8,
+      "to": 3,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            54.5,
+            34.0
+          ],
+          [
+            60.5,
+            34.0
+          ],
+          [
+            60.5,
+            20.0
+          ],
+          [
+            66.5,
+            20.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    },
+    {
+      "from": 3,
+      "to": 9,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            69.5,
+            20.0
+          ],
+          [
+            71.5,
+            20.0
+          ],
+          [
+            73.5,
+            20.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    },
+    {
+      "from": 9,
+      "to": 4,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            76.5,
+            20.0
+          ],
+          [
+            79.5,
+            20.0
+          ],
+          [
+            82.5,
+            20.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    },
+    {
+      "from": 7,
+      "to": 3,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            54.5,
+            27.0
+          ],
+          [
+            60.5,
+            27.0
+          ],
+          [
+            60.5,
+            20.0
+          ],
+          [
+            66.5,
+            20.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    },
+    {
+      "from": 6,
+      "to": 3,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            54.5,
+            20.0
+          ],
+          [
+            60.5,
+            20.0
+          ],
+          [
+            66.5,
+            20.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    },
+    {
+      "from": 5,
+      "to": 3,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            54.5,
+            13.0
+          ],
+          [
+            60.5,
+            13.0
+          ],
+          [
+            60.5,
+            20.0
+          ],
+          [
+            66.5,
+            20.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    }
+  ],
+  "workflow": [
+    {
+      "type": "Start",
+      "id": "7d5e44c8-f0d6-402f-a00f-a67dce4810ac",
+      "name": "",
+      "description": null,
+      "pointers": [
+        {
+          "pointsTo": "96e3ae93-1642-4491-b31b-d555469f5b6d",
+          "expression": null
+        }
+      ],
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ],
+      "status": 0
+    },
+    {
+      "type": "Parallel",
+      "id": "1379813b-89ee-4b77-86ca-bff6479a3446",
+      "name": "",
+      "description": "",
+      "pointers": [
+        {
+          "pointsTo": "debf0676-880b-4f8a-a43d-c59caa679719",
+          "expression": null
+        },
+        {
+          "pointsTo": "e1cf576a-01d8-495c-80e7-a610cd315526",
+          "expression": null
+        },
+        {
+          "pointsTo": "26305f7f-40d0-4989-973e-baa9f6b9fa42",
+          "expression": null
+        },
+        {
+          "pointsTo": "9d59712f-34c7-4a5a-92e3-ef9bd569c9e0",
+          "expression": null
+        }
+      ],
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ],
+      "status": 0
+    },
+    {
+      "type": "Parallel",
+      "id": "ba30d06e-a39a-43a2-a716-40f700b44d23",
+      "name": "",
+      "description": "",
+      "pointers": [
+        {
+          "pointsTo": "6443f583-6624-45eb-917a-590765bfcef2",
+          "expression": null
+        }
+      ],
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ],
+      "status": 0
+    },
+    {
+      "type": "End",
+      "id": "ecdd05e7-b05b-4fae-8915-bce9c21f6814",
+      "name": "",
+      "description": "",
+      "pointers": [],
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ],
+      "status": 0
+    },
+    {
+      "type": "Activity",
+      "id": "debf0676-880b-4f8a-a43d-c59caa679719",
+      "name": "Test",
+      "description": "Test",
+      "pointers": [
+        {
+          "pointsTo": "ba30d06e-a39a-43a2-a716-40f700b44d23",
+          "expression": null
+        }
+      ],
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ],
+      "status": 0
+    },
+    {
+      "type": "Activity",
+      "id": "e1cf576a-01d8-495c-80e7-a610cd315526",
+      "name": "Test",
+      "description": "Test",
+      "pointers": [
+        {
+          "pointsTo": "ba30d06e-a39a-43a2-a716-40f700b44d23",
+          "expression": null
+        }
+      ],
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ],
+      "status": 0
+    },
+    {
+      "type": "Activity",
+      "id": "26305f7f-40d0-4989-973e-baa9f6b9fa42",
+      "name": "Test",
+      "description": "Test",
+      "pointers": [
+        {
+          "pointsTo": "ba30d06e-a39a-43a2-a716-40f700b44d23",
+          "expression": null
+        }
+      ],
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ],
+      "status": 0
+    },
+    {
+      "type": "Activity",
+      "id": "9d59712f-34c7-4a5a-92e3-ef9bd569c9e0",
+      "name": "Test",
+      "description": "Test",
+      "pointers": [
+        {
+          "pointsTo": "ba30d06e-a39a-43a2-a716-40f700b44d23",
+          "expression": null
+        }
+      ],
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ],
+      "status": 0
+    },
+    {
+      "type": "Activity",
+      "id": "6443f583-6624-45eb-917a-590765bfcef2",
+      "name": "Test",
+      "description": "Test",
+      "pointers": [
+        {
+          "pointsTo": "ecdd05e7-b05b-4fae-8915-bce9c21f6814",
+          "expression": null
+        }
+      ],
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ],
+      "status": 0
+    },
+    {
+      "type": "Activity",
+      "id": "96e3ae93-1642-4491-b31b-d555469f5b6d",
+      "name": "Test",
+      "description": "Test",
+      "pointers": [
+        {
+          "pointsTo": "1379813b-89ee-4b77-86ca-bff6479a3446",
+          "expression": null
+        }
+      ],
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "f46eaae6-50bd-4614-8764-15240887d737"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "Test"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ],
+      "status": 0
+    }
+  ],
+  "chronStamp": null,
+  "projectId": "18d215e7-cc4a-4944-aba6-37c52298288f",
+  "configuration": [],
+  "created": "2022-03-01T13:29:44.954Z",
+  "createdBy": "e350f30b-7b03-47a7-86c6-87df876df286",
+  "updated": "2022-03-01T13:30:44.091Z",
+  "updatedBy": "e350f30b-7b03-47a7-86c6-87df876df286",
+  "deactivated": false
+}

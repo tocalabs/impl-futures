@@ -1,0 +1,186 @@
+{
+  "id": "6035362761a051000135b971",
+  "workflowId": "26e1140d-b813-4ce7-b52d-fc2ff99ffdeb",
+  "associatedUserId": "ff0c0297-3539-4539-a119-1403d3a3f6ce",
+  "name": "FTSE 100 workflow",
+  "description": "FTSE 100",
+  "nodeDataArray": [
+    {
+      "category": "Start",
+      "text": "",
+      "key": 1,
+      "loc": "50 300",
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ]
+    },
+    {
+      "category": "Activity",
+      "text": "FTSE 100 activity",
+      "key": 2,
+      "loc": "275 300",
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "84c36b96-6609-4aae-b1d2-2b0842d0e4dd"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "collecting data of the FTSE 100"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ]
+    },
+    {
+      "category": "End",
+      "text": "",
+      "key": 4,
+      "loc": "525 300",
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ]
+    }
+  ],
+  "linkDataArray": [
+    {
+      "from": 1,
+      "to": 2,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            4.5,
+            13.0
+          ],
+          [
+            10.5,
+            13.0
+          ]
+        ],
+        "labelPart": 0,
+        "labelOffset": [
+          0.0,
+          0.0
+        ],
+        "anchors": null
+      }
+    },
+    {
+      "from": 2,
+      "to": 4,
+      "fromPort": null,
+      "toPort": null,
+      "points": null,
+      "linkData": {
+        "path": [
+          [
+            13.5,
+            13.0
+          ],
+          [
+            17.0,
+            13.0
+          ],
+          [
+            20.5,
+            13.0
+          ]
+        ],
+        "labelPart": 1,
+        "labelOffset": null,
+        "anchors": null
+      }
+    }
+  ],
+  "workflow": [
+    {
+      "type": "Start",
+      "id": "f9832781-226a-4076-bdab-5b9f6699081d",
+      "name": "",
+      "description": "",
+      "pointers": [
+        {
+          "pointsTo": "b7777d45-7600-49ac-b400-0e65ac710694",
+          "expression": null
+        }
+      ],
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ],
+      "status": 0
+    },
+    {
+      "type": "Activity",
+      "id": "b7777d45-7600-49ac-b400-0e65ac710694",
+      "name": "FTSE 100 activity",
+      "description": "collecting data of the FTSE 100",
+      "pointers": [
+        {
+          "pointsTo": "0a285319-88bf-43ee-b7f7-92e43b8e0086",
+          "expression": null
+        }
+      ],
+      "parameters": [
+        {
+          "key": "ActivityId",
+          "type": "string",
+          "value": "84c36b96-6609-4aae-b1d2-2b0842d0e4dd"
+        },
+        {
+          "key": "Description",
+          "type": "string",
+          "value": "collecting data of the FTSE 100"
+        },
+        {
+          "key": "FailOnError",
+          "type": "boolean",
+          "value": false
+        }
+      ],
+      "status": 0
+    },
+    {
+      "type": "End",
+      "id": "0a285319-88bf-43ee-b7f7-92e43b8e0086",
+      "name": "",
+      "description": "",
+      "pointers": [],
+      "parameters": [
+        {
+          "key": "Description",
+          "type": "string",
+          "value": null
+        }
+      ],
+      "status": 0
+    }
+  ],
+  "chronStamp": null,
+  "projectId": "19442ee5-ecec-4415-97d5-5485447f98be",
+  "configuration": [],
+  "created": "2021-02-23T17:06:47.977Z",
+  "createdBy": "ff0c0297-3539-4539-a119-1403d3a3f6ce",
+  "updated": "2021-03-11T20:37:01.3756014Z",
+  "updatedBy": "ff0c0297-3539-4539-a119-1403d3a3f6ce",
+  "deactivated": false
+}
