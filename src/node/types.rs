@@ -263,6 +263,7 @@ impl Node for Parallel {
                 let new = dependencies_met.load(Ordering::Relaxed);
                 if new == dependencies.load(Ordering::Acquire) {
                     let _ = job_channel.send(self.create_msg().await).await;
+                    dependencies_met.store(0, Ordering::Relaxed);
                 }
             }
         }
