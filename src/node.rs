@@ -13,7 +13,7 @@ use thiserror::Error;
 
 use super::workflow::WorkflowNodeType;
 
-pub(crate) mod types;
+pub mod types;
 
 /// The error type used for defining an exception when running a node
 #[derive(Error, Debug)]

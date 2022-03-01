@@ -27,10 +27,13 @@
 
 use std::io;
 
-use tokio::{fs, task};
 use tokio::select;
-use tokio::sync::{broadcast, mpsc::{Receiver, Sender}};
+use tokio::sync::{
+    broadcast,
+    mpsc::{Receiver, Sender},
+};
 use tokio::time::Instant;
+use tokio::{fs, task};
 
 use crate::reactor::Event;
 use crate::workflow;
@@ -38,7 +41,11 @@ use crate::workflow::{Job, Message, NodeStatus};
 
 /// The execute_handler function takes a workflow ID, gets the workflow and creates a Job struct
 /// from that workflow. Once we have a Job struct, the job is driven to completion by the [`run`](self::run) function.
-pub async fn execute_handler(file: &str, rc_clone: Sender<Event>, cancellation_tx: broadcast::Sender<()>) -> Result<(), io::Error> {
+pub async fn execute_handler(
+    file: &str,
+    rc_clone: Sender<Event>,
+    cancellation_tx: broadcast::Sender<()>,
+) -> Result<(), io::Error> {
     let start = Instant::now();
     let wf_json = fs::read_to_string(file).await?;
     let wf: workflow::Workflow = serde_json::from_str(&wf_json)?;
@@ -55,7 +62,7 @@ pub async fn execute_handler(file: &str, rc_clone: Sender<Event>, cancellation_t
 /// Each node is responsible for notifying the job that it can move forward
 /// The next node function will need to take a pointer to the current node that has finished
 /// So it knows where to resume the job from
-async fn run(job: Job, mut rx: Receiver<Message>, cancellation_tx: broadcast::Sender<()>) {
+pub async fn run(job: Job, mut rx: Receiver<Message>, cancellation_tx: broadcast::Sender<()>) {
     if let Some(next_node) = job.next_node(None) {
         // gets start node at very beginning
         let _ = next_node.get(0).expect("Missing Start Node").run().await; // Waiting for start node to complete
@@ -82,7 +89,7 @@ async fn run(job: Job, mut rx: Receiver<Message>, cancellation_tx: broadcast::Se
                 None => {
                     //drop(job);
                     break; // This is because we don't drop the Job when End is returned so we need to manually break out of this loop
-                    // We could manually drop Job here which would have the same effect
+                           // We could manually drop Job here which would have the same effect
                 }
             },
         }

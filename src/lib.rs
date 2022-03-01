@@ -25,12 +25,11 @@ pub(crate) use std::io;
 pub(crate) use tokio::task;
 
 use crate::reactor::{Event, Reactor};
-
-mod executor;
-mod node;
-mod reactor;
-mod spawner;
-mod workflow;
+pub mod executor;
+pub mod node;
+pub mod reactor;
+pub mod spawner;
+pub mod workflow;
 
 /// Sets up the runtime and starts the message broker listeners
 ///
